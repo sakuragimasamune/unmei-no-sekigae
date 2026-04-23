@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>座席配置システム</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="header">
+        <h1>座席配置システム</h1>
+    </div>
+
+    <!-- ボタン群:CSSのflex-wrapで自然に折り返す。グループはdata-groupで管理 -->
+    <div id="button-container">
+        <!-- 保存・読み込み -->
+        <button class="btn" id="save-config-btn" data-group="storage">保存</button>
+        <button class="btn" id="load-config-btn" data-group="storage">読み込み</button>
+
+        <!-- 各種設定 -->
+        <button class="btn" id="roster-btn" data-group="settings">名簿設定</button>
+        <button class="btn" id="seat-setting-btn" data-group="settings">座席設定</button>
+        <button class="btn" id="gender-setting-btn" data-group="settings">男女設定</button>
+        <button class="btn" id="color-settings-btn" data-group="settings">カラー設定</button>
+        <button class="btn" id="message-settings-btn" data-group="settings">メッセージ設定</button>
+        <button class="btn" id="effect-settings-btn" data-group="settings">特殊演出設定</button>
+        <button class="btn" id="sound-settings-btn" data-group="settings">サウンド設定</button>
+
+        <!-- 表示・アクション -->
+        <button class="btn" id="teacher-view-btn" data-group="action">教員視点</button>
+        <button class="btn" id="start-slot-btn" data-group="action">スタート</button>
+
+        <!-- 出力 -->
+        <button class="btn" id="print-btn" data-group="output" title="座席表を印刷します。用紙サイズはB5横向きを選択してください">印刷</button>
+
+        <!-- 破壊系 -->
+        <button class="btn" id="clear-btn" data-group="danger">座席をクリア</button>
+        <button class="btn" id="clear-storage-btn" data-group="danger">データ全削除</button>
+    </div>
+
+    <!-- 性別設定用のサブボタン -->
+    <div id="gender-subbuttons" class="subbuttons-container" style="display: none;">
+        <button class="btn sub-btn" id="clear-gender-btn">性別指定解除</button>
+        <button class="btn sub-btn" id="male-seat-btn">男子席設定</button>
+        <button class="btn sub-btn" id="female-seat-btn">女子席設定</button>
+    </div>
+
+    <div id="setting-mode-alert">
+        座席設定モード: クリックで座席の利用可否を切り替えできます
+    </div>
+
+    <div class="classroom">
+        <div class="teacher-desk">教卓</div>
+        <div class="seating-grid" id="seating-grid">
+            <!-- 座席はJavaScriptで動的に生成 -->
+        </div>
+    </div>
+
+    <!-- 名簿設定モーダル -->
+    <div id="roster-modal" class="modal">
+        <div class="modal-content">
+            <h2>名簿設定</h2>
+            <p>一行に一人ずつ入力してください。<br>
+               名簿エクセルから出席番号と名前と性別をそのままコピペしてください。<br>
+               <strong>フォーマット例:</strong> 番号[タブ]氏名[タブ]性別[タブ]フリガナ</p>
+            <textarea id="roster-input" rows="10" placeholder="例:
+1[タブ]山田[半角スペース]太郎[タブ]男[タブ]ヤマダ タロウ
+2[タブ]佐藤[半角スペース]花子[タブ]女[タブ]サトウ ハナコ
+※番号、性別、フリガナは省略可能"></textarea>
+            <div class="modal-buttons">
+                <button class="btn" id="roster-cancel">キャンセル</button>
+                <button class="btn" id="roster-save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="color-modal" class="modal">
+        <div class="modal-content">
+            <h2>座席カラー設定</h2>
+            
+            <div class="color-settings">
+                <div class="setting-group">
+                    <label>
+                        <input type="checkbox" id="enable-gender-colors">
+                        性別による色分けを有効にする
+                    </label>
+                </div>
+
+                <div class="setting-group">
+                    <h3>基本色設定</h3>
+                    <div class="color-picker">
+                        <label>通常の座席色：</label>
+                        <input type="color" id="default-color" value="#e3f2fd">
+                    </div>
+                    <div class="color-picker">
+                        <label>男子の座席色：</label>
+                        <input type="color" id="male-color" value="#f5d682">
+                    </div>
+                    <div class="color-picker">
+                        <label>女子の座席色：</label>
+                        <input type="color" id="female-color" value="#b4faaf">
+                    </div>
+                </div>
+
+                <div class="setting-group">
+                    <h3>カスタムカラー</h3>
+                    <div id="custom-colors"></div>
+                    <button id="add-color" class="btn">カラーセットを追加</button>
+                </div>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn" id="color-settings-cancel">キャンセル</button>
+                <button class="btn" id="color-settings-save">保存</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- カスタムメッセージ設定モーダル -->
+    <div id="message-modal" class="modal">
+        <div class="modal-content">
+            <h2>席替え占いの設定</h2>
+            
+            <div class="fortune-set-controls">
+                <div class="fortune-set-selector">
+                    <input type="radio" id="default-fortune" name="fortune-type" value="default" checked>
+                    <label for="default-fortune">デフォルトの占いセットを使用</label>
+                    
+                    <input type="radio" id="custom-fortune" name="fortune-type" value="custom">
+                    <label for="custom-fortune">カスタム占いセットを使用</label>
+                </div>
+
+                <div class="fortune-file-controls" style="display: none;">
+                    <input type="file" id="fortune-file" accept=".json" class="file-input">
+                    <button class="btn" id="download-current">現在の占いセットをダウンロード</button>
+                    <button class="btn" id="create-new">新規作成</button>
+                </div>
+            </div>
+
+            <div class="current-fortune-info">
+                <h3>現在の占いセット：<span id="current-fortune-name">デフォルト</span></h3>
+                <p>メッセージ総数：<span id="message-count">0</span>件</p>
+                <p>点数範囲：<span id="score-range">0-100</span>点</p>
+            </div>
+
+            <div class="fortune-message-editor" style="display: none;">
+                <h3>メッセージの編集</h3>
+                <div class="message-controls">
+                    <button id="add-message" class="btn">新規メッセージを追加</button>
+                </div>
+                <div class="message-list"></div>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn" id="message-cancel">キャンセル</button>
+                <button class="btn" id="message-save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 特殊演出設定モーダル -->
+    <div id="effect-modal" class="modal">
+        <div class="modal-content">
+            <h2>特殊演出の設定</h2>
+            
+            <div class="settings-panel">
+                <h3>特別席確定演出　(デフォルト20)</h3>
+                <div class="slider-container">
+                    <label>前後列確定演出の確率:</label>
+                    <input type="range" class="effect-slider" id="front-back-slider" min="0" max="100">
+                    <span class="probability-value" id="front-back-value"></span>
+                </div>
+                <div class="slider-container">
+                    <label>窓際席確定演出の確率:</label>
+                    <input type="range" class="effect-slider" id="window-slider" min="0" max="100">
+                    <span class="probability-value" id="window-value"></span>
+                </div>
+                
+                <h3>交換イベント　(デフォルト5)</h3>
+                <div class="slider-container">
+                    <label>交換イベントの発生確率:</label>
+                    <input type="range" class="effect-slider" id="exchange-slider" min="0" max="20">
+                    <span class="probability-value" id="exchange-value"></span>
+                </div>
+                
+                <h3>地獄のシャッフルイベント　(デフォルト1)</h3>
+                <div class="slider-container">
+                    <label>シャッフルイベントの発生確率:</label>
+                    <input type="range" class="effect-slider" id="shuffle-slider" min="0" max="2">
+                    <span class="probability-value" id="shuffle-value"></span>
+                </div>
+                
+                <h3>運命の再会イベント　(デフォルト5)</h3>
+                <div class="slider-container">
+                    <label>運命の再会イベントの発生確率:</label>
+                    <input type="range" class="effect-slider" id="reunion-slider" min="0" max="20">
+                    <span class="probability-value" id="reunion-value"></span>
+                </div>
+                
+                <h3>ラストワンチャレンジ</h3>
+                <div class="slider-container">
+                    <label>
+                        <input type="checkbox" id="last-one-challenge-enabled">
+                        ラストワンチャレンジを有効にする
+                    </label>
+                </div>
+            </div>
+
+            <div class="modal-buttons">
+                <button class="btn" id="effect-settings-cancel">キャンセル</button>
+                <button class="btn" id="effect-settings-save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- サウンド設定モーダル(Phase 3で本実装) -->
+    <div id="sound-modal" class="modal">
+        <div class="modal-content">
+            <h2>サウンド設定</h2>
+            <div class="settings-panel">
+                <div class="slider-container">
+                    <label>
+                        <input type="checkbox" id="sound-enabled">
+                        効果音を有効にする
+                    </label>
+                </div>
+                <div class="slider-container">
+                    <label>音量:</label>
+                    <input type="range" class="effect-slider" id="sound-volume" min="0" max="100" value="50">
+                    <span class="probability-value" id="sound-volume-value">50%</span>
+                </div>
+                <p style="color: #666; font-size: 14px; margin-top: 15px;">
+                    ※ スロットの回転音、当選音、特殊演出音などが再生されます
+                </p>
+            </div>
+            <div class="modal-buttons">
+                <button class="btn" id="sound-settings-cancel">キャンセル</button>
+                <button class="btn" id="sound-settings-save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 完了モーダル -->
+    <div id="completion-modal" class="modal">
+        <div class="modal-content">
+            <h2>座席配置完了</h2>
+            <p>全員の座席が決まりました！</p>
+            <div class="modal-buttons">
+                <button class="btn" id="save-and-continue">保存して座席表に戻る</button>
+                <button class="btn" id="save-and-new">保存して新規開始</button>
+                <button class="btn" id="just-continue">保存せずに続ける</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- スクリプト読み込み順:音響(他JSが参照可)→データ→演出→メイン -->
+    <script src="sound.js"></script>
+    <script src="fortune.js"></script>
+    <script src="slot.js"></script>
+    <script src="print.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

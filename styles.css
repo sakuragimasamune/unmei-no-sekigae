@@ -1,0 +1,730 @@
+/* ============================================================
+ * 座席配置システム スタイルシート (Phase 2 リファクタ版)
+ *
+ * 構造:
+ *  1. CSS変数(デザイントークン)
+ *  2. リセット・ベース
+ *  3. ヘッダーとボタン群
+ *  4. 教室レイアウト・座席
+ *  5. モーダル共通
+ *  6. 設定モーダル(色・占い・演出・サウンド)
+ *  7. 演出アニメーション(通常・運命の再会・地獄・ラストワン)
+ *  8. ドラッグ&ドロップ
+ *  9. レスポンシブ調整
+ * ============================================================ */
+
+/* ─── 1. CSS変数 ──────────────────────────────────────────── */
+:root {
+    /* メインカラー */
+    --color-primary:        #4a90e2;
+    --color-primary-hover:  #357abd;
+    --color-accent:         #e2994a;
+    --color-bg:             #f5f5f5;
+    --color-text:           #333;
+    --color-text-muted:     #666;
+    --color-text-faint:     #999;
+
+    /* ボタングループ別カラー */
+    --color-storage:        #4CAF50;   /* 保存/読み込み:緑 */
+    --color-storage-hover:  #388E3C;
+    --color-settings:       #607D8B;   /* 各種設定:グレイッシュブルー */
+    --color-settings-hover: #455A64;
+    --color-action-start:   #FFD700;   /* スタート:ゴールド */
+    --color-action-hover:   #FFC107;
+    --color-active:         #FF5722;   /* アクティブ状態:オレンジ */
+    --color-active-hover:   #E64A19;
+    --color-danger:         #f44336;   /* 危険:赤 */
+    --color-danger-hover:   #d32f2f;
+    --color-output:         #9c27b0;   /* 出力:紫 */
+    --color-output-hover:   #7b1fa2;
+
+    /* 座席カラー */
+    --color-seat-default:   #e3f2fd;
+    --color-seat-disabled:  #eeeeee;
+    --color-seat-male-hint: #FFE5CC;   /* 男子席指定の薄オレンジ */
+    --color-seat-female-hint: #E8F5E9; /* 女子席指定の薄緑 */
+
+    /* レイアウトサイズ */
+    --classroom-max-width:  1300px;
+    --seat-min-width:       100px;     /* 8列でもはみ出さない最小幅 */
+    --seat-height:          55px;
+    --seat-radius:          8px;
+    --grid-gap:             10px;
+    --grid-padding:         20px;
+
+    /* 影・角丸 */
+    --shadow-sm:            0 2px 5px rgba(0,0,0,0.05);
+    --shadow-md:            0 2px 10px rgba(0,0,0,0.1);
+    --shadow-lg:            0 4px 20px rgba(0,0,0,0.15);
+    --radius-md:            8px;
+    --radius-lg:            12px;
+}
+
+/* ─── 2. リセット・ベース ───────────────────────────────── */
+* {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+}
+body {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+    background-color: var(--color-bg);
+    padding: 20px;
+    color: var(--color-text);
+}
+
+/* ─── 3. ヘッダーとボタン群 ─────────────────────────────── */
+.header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+.header h1 {
+    font-size: 28px;
+    color: #2c3e50;
+}
+
+#button-container {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 30px;
+    justify-content: center;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.btn {
+    padding: 10px 20px;
+    border: none;
+    border-radius: 5px;
+    background-color: var(--color-primary);
+    color: white;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-size: 14px;
+}
+.btn:hover {
+    background-color: var(--color-primary-hover);
+    transform: translateY(-1px);
+}
+.btn.active {
+    background-color: var(--color-accent);
+}
+
+/* ボタングループ別カラー(data-group属性で切り替え) */
+.btn[data-group="storage"]      { background-color: var(--color-storage); }
+.btn[data-group="storage"]:hover{ background-color: var(--color-storage-hover); }
+
+.btn[data-group="settings"]      { background-color: var(--color-settings); }
+.btn[data-group="settings"]:hover{ background-color: var(--color-settings-hover); }
+
+.btn[data-group="output"]        { background-color: var(--color-output); }
+.btn[data-group="output"]:hover  { background-color: var(--color-output-hover); }
+
+.btn[data-group="danger"]        { background-color: var(--color-danger); }
+.btn[data-group="danger"]:hover  { background-color: var(--color-danger-hover); }
+
+/* スタートボタンだけ特別扱い(ゴールド) */
+#start-slot-btn {
+    background-color: var(--color-action-start);
+    color: var(--color-text);
+    font-weight: bold;
+    text-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+}
+#start-slot-btn:hover {
+    background-color: var(--color-action-hover);
+    box-shadow: 0 0 15px rgba(255, 215, 0, 0.6);
+}
+
+/* 座席設定・男女設定のアクティブ状態 */
+#seat-setting-btn.active,
+#gender-setting-btn.active {
+    background-color: var(--color-active) !important;
+    box-shadow: 0 0 15px rgba(255, 87, 34, 0.6);
+}
+#seat-setting-btn.active:hover,
+#gender-setting-btn.active:hover {
+    background-color: var(--color-active-hover) !important;
+}
+
+/* 男女サブボタン */
+.subbuttons-container {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+    margin: -20px 0 20px;
+    transition: all 0.3s ease;
+}
+.sub-btn {
+    background-color: #78909c;
+    font-size: 0.9em;
+}
+.sub-btn:hover { background-color: #546e7a; }
+.sub-btn.active { background-color: var(--color-accent); }
+
+#setting-mode-alert {
+    display: none;
+    background-color: #fff3e0;
+    color: #f57c00;
+    padding: 15px;
+    border-radius: var(--radius-md);
+    margin-bottom: 20px;
+    text-align: center;
+    max-width: 800px;
+    margin: 0 auto 20px;
+    box-shadow: var(--shadow-sm);
+}
+
+/* ─── 4. 教室レイアウト・座席 ───────────────────────────── */
+.classroom {
+    max-width: var(--classroom-max-width);
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+}
+
+.teacher-desk {
+    width: 200px;
+    height: 45px;
+    margin: 0 auto 20px;
+    background-color: #34495e;
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-md);
+    font-weight: bold;
+    box-shadow: var(--shadow-md);
+    order: 0;
+}
+
+.seating-grid {
+    display: grid;
+    /* repeat(8) ハードコードを廃止:CSS変数の min-width で制御 */
+    grid-template-columns: repeat(8, minmax(var(--seat-min-width), 1fr));
+    gap: var(--grid-gap);
+    background-color: white;
+    padding: var(--grid-padding);
+    border-radius: var(--radius-lg);
+    box-shadow: var(--shadow-md);
+    /* 親 .classroom の max-width を超えない */
+    max-width: 100%;
+    margin: 0 auto;
+}
+
+.seat {
+    height: var(--seat-height);
+    background-color: var(--color-seat-default);
+    border-radius: var(--seat-radius);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #1976d2;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    border: 2px solid transparent;
+    padding: 0 8px;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    transform-origin: center center;
+}
+.seat:hover {
+    transform: scale(1.05);
+    border-color: #1976d2;
+}
+.seat.disabled {
+    background-color: var(--color-seat-disabled);
+    color: var(--color-text-faint);
+    border-color: transparent;
+}
+
+/* 文字数による自動縮小 */
+.seat.assigned {
+    font-size: var(--dynamic-font-size, 18px);
+    cursor: grab;
+}
+.seat.assigned:active { cursor: grabbing; }
+.seat.assigned[data-length="long"]      { --dynamic-font-size: 15px; }
+.seat.assigned[data-length="very-long"] { --dynamic-font-size: 13px; }
+
+/* 教員視点 */
+.seating-grid.teacher-view { transform: rotate(180deg); }
+.seating-grid.teacher-view .seat { transform: rotate(180deg); }
+
+/* ─── 5. モーダル共通 ──────────────────────────────────── */
+.modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background-color: rgba(0,0,0,0.5);
+    justify-content: center;
+    align-items: center;
+    z-index: 100;
+}
+.modal-content {
+    background-color: white;
+    padding: 30px;
+    border-radius: var(--radius-lg);
+    width: 90%;
+    max-width: 600px;
+    box-shadow: var(--shadow-lg);
+    max-height: 90vh;
+    overflow-y: auto;
+}
+.modal-content h2 {
+    margin-bottom: 15px;
+    color: #2c3e50;
+}
+.modal-content p {
+    margin-bottom: 20px;
+    color: var(--color-text-muted);
+    line-height: 1.5;
+}
+.modal-content textarea {
+    width: 100%;
+    margin: 10px 0;
+    padding: 15px;
+    border: 1px solid #ddd;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+    resize: vertical;
+}
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+    margin-top: 20px;
+}
+
+/* ─── 6. 設定モーダル(色・占い・演出・サウンド) ──────── */
+.color-settings { padding: 20px 0; }
+
+.setting-group {
+    margin-bottom: 20px;
+    padding: 15px;
+    border: 1px solid #eee;
+    border-radius: var(--radius-md);
+}
+.setting-group h3 {
+    margin: 0 0 15px 0;
+    font-size: 16px;
+    color: var(--color-text);
+}
+
+.color-picker {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+.color-picker label { min-width: 120px; }
+.color-picker input[type="color"] {
+    padding: 0;
+    width: 50px;
+    height: 30px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.custom-color-set {
+    display: flex;
+    align-items: center;
+    margin-bottom: 10px;
+    gap: 10px;
+}
+.custom-color-set input[type="text"] {
+    padding: 5px 10px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    width: 120px;
+}
+.custom-color-set .remove-color {
+    padding: 5px 10px;
+    background: var(--color-danger);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+}
+#add-color {
+    margin-top: 10px;
+    background: var(--color-storage);
+    color: white;
+}
+
+/* スライダー(演出・サウンド設定) */
+.slider-container {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 15px 0;
+}
+.effect-slider {
+    flex-grow: 1;
+    height: 8px;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #ddd;
+    border-radius: 4px;
+    outline: none;
+}
+.effect-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 20px;
+    height: 20px;
+    background: var(--color-storage);
+    border-radius: 50%;
+    cursor: pointer;
+}
+.probability-value {
+    min-width: 60px;
+    text-align: right;
+    font-weight: bold;
+    color: var(--color-storage);
+}
+
+/* 占い設定モーダル */
+.fortune-set-controls {
+    margin: 20px 0;
+    padding: 15px;
+    background: var(--color-bg);
+    border-radius: var(--radius-md);
+}
+.fortune-set-selector { margin-bottom: 15px; }
+.fortune-set-selector label {
+    margin-right: 20px;
+    cursor: pointer;
+}
+.fortune-file-controls {
+    padding: 10px;
+    background: white;
+    border-radius: 4px;
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+.file-input {
+    flex-grow: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+.current-fortune-info {
+    margin: 20px 0;
+    padding: 15px;
+    background: #e3f2fd;
+    border-radius: var(--radius-md);
+}
+.current-fortune-info h3 {
+    margin: 0 0 10px 0;
+    color: #1976d2;
+}
+.current-fortune-info p {
+    margin: 5px 0;
+    color: var(--color-text);
+}
+
+/* メッセージ編集 */
+.message-list {
+    max-height: 400px;
+    overflow-y: auto;
+    margin: 20px 0;
+    padding: 10px;
+    border: 1px solid #eee;
+    border-radius: var(--radius-md);
+}
+.message-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+    padding: 10px;
+    background: var(--color-bg);
+    border-radius: 4px;
+}
+.message-content {
+    display: flex;
+    flex-grow: 1;
+    gap: 10px;
+}
+.message-checkbox { width: 20px; height: 20px; }
+.message-input {
+    flex-grow: 1;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+.score-input {
+    width: 80px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+.message-input-group {
+    display: flex;
+    gap: 10px;
+    margin: 20px 0;
+    padding: 15px;
+    background: #f9f9f9;
+    border-radius: var(--radius-md);
+}
+.message-controls {
+    display: flex;
+    gap: 10px;
+    margin: 10px 0;
+}
+.delete-btn {
+    margin-left: auto;
+    background-color: var(--color-danger);
+}
+.no-messages {
+    text-align: center;
+    padding: 20px;
+    color: var(--color-text-muted);
+}
+
+/* ─── 7. 演出アニメーション ────────────────────────────── */
+
+/* 通常の席ハイライト(金色キラキラ) */
+@keyframes seatHighlight {
+    0% {
+        transform: scale(1);
+        box-shadow: none;
+    }
+    50% {
+        transform: scale(2.5);
+        box-shadow: 0 0 60px #FFD700, 0 0 100px #FFA500, 0 0 140px #FF8C00;
+        background-color: #FFD700;
+        color: white;
+        text-shadow: 0 0 10px rgba(255, 255, 255, 0.8);
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: none;
+    }
+}
+.selected-seat {
+    animation: seatHighlight 1.5s cubic-bezier(.17,.67,.83,.67) !important;
+    z-index: 999;
+    position: relative;
+}
+
+/* 運命の再会(ハート拍動) */
+@keyframes reunionHeartbeat {
+    0%, 100% {
+        background: linear-gradient(135deg, #FFB6C1 0%, #FF69B4 50%, #FF1493 100%);
+        box-shadow: 0 0 20px #FF69B4, 0 0 40px #FF1493;
+    }
+    50% {
+        background: linear-gradient(135deg, #FF69B4 0%, #FF1493 50%, #C71585 100%);
+        box-shadow: 0 0 40px #FF69B4, 0 0 80px #FF1493, 0 0 120px #C71585;
+    }
+}
+@keyframes floatingHeart {
+    0%   { opacity: 0;   transform: translateY(0)    scale(0); }
+    50%  { opacity: 0.3; transform: translateY(-20px) scale(1.2); }
+    100% { opacity: 0;   transform: translateY(-40px) scale(0.8); }
+}
+.reunion-heartbeat {
+    animation: reunionHeartbeat 1s ease-in-out infinite !important;
+    z-index: 999 !important;
+    position: relative !important;
+    color: white !important;
+    text-shadow: 0 0 10px rgba(255, 255, 255, 0.8) !important;
+}
+.reunion-heartbeat::before {
+    content: "💕" !important;
+    position: absolute !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    font-size: 4em !important;
+    animation: floatingHeart 2s ease-out infinite !important;
+    pointer-events: none !important;
+    z-index: 1000 !important;
+    line-height: 1 !important;
+    display: block !important;
+}
+
+/* 運命の再会オーバーレイ */
+@keyframes reunionFlash {
+    0%, 100% { background-color: rgba(255, 255, 255, 0.95); }
+    50%      { background-color: rgba(255, 192, 203, 0.95); }
+}
+.special-effect-overlay.reunion {
+    animation: reunionFlash 0.8s ease-in-out 3;
+}
+.special-effect-message.reunion {
+    color: #FF69B4;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+.reunion-pair {
+    font-size: 80px;
+    margin-top: 20px;
+    color: #FF1493;
+    text-align: center;
+}
+.fate-line {
+    position: absolute;
+    height: 3px;
+    background: linear-gradient(90deg, #FF69B4, #FFB6C1);
+    transform-origin: left center;
+    animation: drawLine 1s ease-out forwards;
+    box-shadow: 0 0 10px rgba(255, 105, 180, 0.5);
+}
+@keyframes drawLine {
+    from { width: 0;    opacity: 0; }
+    to   { width: 100%; opacity: 1; }
+}
+
+/* 地獄のシャッフル */
+@keyframes hellShake {
+    0%, 100% { transform: translate(0, 0) rotate(0deg); }
+    25%      { transform: translate(-10px, 8px) rotate(-2deg); }
+    50%      { transform: translate(8px, -10px) rotate(2deg); }
+    75%      { transform: translate(-12px, -8px) rotate(-1deg); }
+}
+@keyframes hellFlash {
+    0%, 100% { background-color: rgba(0, 0, 0, 0.9); }
+    50%      { background-color: rgba(139, 0, 0, 0.9); }
+}
+.special-effect-overlay.hell {
+    animation: hellFlash 0.5s ease-in-out infinite;
+}
+.special-effect-container.hell {
+    animation: hellShake 0.2s linear infinite;
+}
+.special-effect-message.hell {
+    color: #FF0000;
+    text-shadow: 0 0 20px #FF0000, 0 0 40px #FF0000;
+    font-size: 80px;
+    animation: hellShake 0.1s linear infinite;
+    width: 100%;
+    text-align: center;
+    position: fixed;
+    left: 50%;
+    top: 50%;
+    transform: translate(-50%, -50%);
+}
+.flame-effect {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(45deg, #ff0000, #ff6b6b);
+    mix-blend-mode: overlay;
+    opacity: 0;
+    animation: flameFlicker 0.5s ease-in-out infinite;
+}
+@keyframes flameFlicker {
+    0%, 100% { opacity: 0.2; }
+    50%      { opacity: 0.4; }
+}
+@keyframes shuffleSeat {
+    0%   { transform: translate(0, 0) rotate(0deg); }
+    25%  { transform: translate(100%, 100%) rotate(180deg); }
+    75%  { transform: translate(-100%, -100%) rotate(-180deg); }
+    100% { transform: translate(0, 0) rotate(360deg); }
+}
+.seat.shuffling {
+    animation: shuffleSeat 1s ease-in-out;
+}
+
+/* ラストワンチャレンジ */
+@keyframes lastOneFlash {
+    0%, 100% { background-color: rgba(0, 0, 0, 0.95); }
+    50%      { background-color: rgba(255, 215, 0, 0.95); }
+}
+.special-effect-overlay.last-one {
+    animation: lastOneFlash 0.5s ease-in-out infinite;
+}
+.special-effect-message.last-one {
+    color: #FFD700;
+    text-shadow: 0 0 30px #FFD700, 0 0 60px #FFD700;
+    font-size: 90px;
+    animation: scale 1s ease-in-out infinite;
+}
+@keyframes rouletteGlow {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 20px #FFD700;
+        background-color: #FFD700;
+    }
+    50% {
+        transform: scale(1.15);
+        box-shadow: 0 0 40px #FFD700;
+        background-color: #FFA500;
+    }
+    100% {
+        transform: scale(1);
+        box-shadow: 0 0 20px #FFD700;
+        background-color: #FFD700;
+    }
+}
+.seat.roulette-active {
+    animation: rouletteGlow 0.3s ease-in-out;
+    z-index: 100;
+    color: white !important;
+}
+.seat.roulette-final {
+    animation: rouletteGlow 0.5s ease-in-out 3;
+    background-color: #FFD700 !important;
+    color: white !important;
+    transform: scale(1.2);
+    z-index: 101;
+}
+
+/* ─── 8. ドラッグ&ドロップ ─────────────────────────────── */
+.seat.dragging {
+    opacity: 0.5;
+    transform: scale(1.05);
+}
+.seat.drag-over {
+    background-color: #e8f5e9;
+    border: 2px dashed #4caf50;
+}
+.seat.exchanging {
+    animation: exchange-flash 0.5s ease-in-out;
+}
+@keyframes exchange-flash {
+    0%, 100% { background-color: inherit; }
+    50%      { background-color: #fff59d; }
+}
+
+/* ─── 9. レスポンシブ調整 ──────────────────────────────── */
+/* 1100px以下:座席を少し小さく */
+@media (max-width: 1100px) {
+    :root {
+        --seat-min-width: 80px;
+        --seat-height: 50px;
+        --grid-gap: 6px;
+        --grid-padding: 12px;
+    }
+    .seat { font-size: 13px; padding: 0 4px; }
+}
+
+/* 800px以下:タブレット */
+@media (max-width: 800px) {
+    body { padding: 10px; }
+    :root {
+        --seat-min-width: 60px;
+        --seat-height: 44px;
+    }
+    .seat { font-size: 11px; padding: 0 2px; }
+    .header h1 { font-size: 22px; }
+    #button-container { gap: 6px; }
+    .btn { padding: 8px 14px; font-size: 13px; }
+}
+
+/* 印刷時:画面用UIを完全に隠す(印刷用CSSはprint.js内で詳細指定) */
+@media print {
+    #button-container,
+    #setting-mode-alert,
+    .subbuttons-container,
+    .modal {
+        display: none !important;
+    }
+}
