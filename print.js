@@ -27,13 +27,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="print-setting-group">
                     <label>
-                        <input type="checkbox" id="show-header" checked>
-                        ヘッダー（タイトル・日付）を表示
+                        <input type="checkbox" id="show-date" checked>
+                        日付を表示(教卓の右に小さく)
                     </label>
                 </div>
                 <div class="print-setting-group">
-                    <label>印刷タイトル:</label>
-                    <input type="text" id="print-title" value="座席表" placeholder="例: 1年A組 座席表">
+                    <label>印刷タイトル(教卓内に表示):</label>
+                    <input type="text" id="print-title" value="教卓" placeholder="例: 1年A組 教卓">
                 </div>
                 <div class="print-setting-group">
                     <label>文字サイズ調整:</label>
@@ -49,12 +49,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 <!-- wrapper:transform: scale で縮小したコンテンツの占有スペースを補正 -->
                 <div id="print-area-wrapper">
                     <div id="print-area">
-                        <div id="print-header">
-                            <h1 id="print-title-display">座席表</h1>
-                            <div id="print-date"></div>
-                        </div>
                         <div id="print-classroom" class="print-classroom">
-                            <!-- 教卓は動的に生成 -->
+                            <!-- 教卓・日付・座席は動的に生成 -->
                         </div>
                     </div>
                 </div>
@@ -132,178 +128,155 @@ document.addEventListener('DOMContentLoaded', () => {
             width: 257mm;  /* B5横向きの実サイズ */
             height: 182mm;
             background-color: white;
-            padding: 20mm 10mm 10mm 10mm;
+            /* ★v2.2:上下の余白をぐっと詰めて1枚に収める */
+            padding: 6mm 8mm 6mm 8mm;
             box-sizing: border-box;
             transform: scale(0.5);
             transform-origin: top left;  /* center → leftに変更:wrapperと位置を揃える */
         }
-        
-        #print-header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 15px;
-            border-bottom: 1px solid #eee;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            flex-wrap: wrap;
-            position: relative;
-            top: -5mm; /* ヘッダーを上に移動 */
-        }
-        
-        #print-title-display {
-            font-size: 26px;
-            font-weight: bold;
-            margin-right: 15px;
-        }
-        
-        #print-date {
-            font-size: 14px;
-            color: #666;
-            margin-top: 5px;
-        }
-        
+
         .print-classroom {
             display: flex;
             flex-direction: column;
-            align-items: center;
+            align-items: stretch;
+            width: 100%;
+            height: 100%;
         }
-        
+
+        /* ★v2.3:教卓ブロック - 3カラムグリッドで教卓を常に中央固定
+           [1fr 左余白] [教卓 auto] [1fr 右余白(日付配置)] */
+        .print-teacher-row {
+            display: grid;
+            grid-template-columns: 1fr auto 1fr;
+            align-items: center;
+            width: 100%;
+            margin: 0 auto 8px auto;
+        }
         .print-teacher-desk {
+            grid-column: 2;  /* 真ん中の列 */
             width: 180px;
-            height: 40px;
+            height: 32px;
             background-color: #34495e;
             color: white;
             display: flex;
             align-items: center;
             justify-content: center;
             border-radius: 6px;
-            margin: 20px 0;
             font-weight: bold;
-            font-size: 20px;
-            box-shadow: 0 3px 5px rgba(0,0,0,0.2);
+            font-size: 18px;
+            box-shadow: 0 2px 3px rgba(0,0,0,0.2);
             border: 2px solid #2c3e50;
         }
-        
+        .print-date-inline {
+            grid-column: 3;       /* 右列(教卓の右隣) */
+            justify-self: start;  /* 右列の左端に配置 = 教卓のすぐ右 */
+            padding-left: 12px;
+            font-size: 13px;
+            color: #555;
+            white-space: nowrap;
+        }
+
         .print-seating-grid {
             display: grid;
-            grid-gap: 5px;
+            grid-gap: 4px;
             width: 100%;
-            /* max-heightを削除して全行表示可能に */
-            grid-auto-rows: minmax(80px, auto); /* 行の高さを自動調整 */
+            /* 行の高さを auto にして、コンテンツ(座席)に追従 */
+            grid-auto-rows: minmax(60px, 1fr);
+            flex: 1;  /* 残りの縦スペース全部使う */
         }
-        
+
         /* 教員視点のグリッド回転 */
         .print-seating-grid.teacher-view {
             transform: rotate(180deg);
         }
-        
         .print-seating-grid.teacher-view .print-seat {
             transform: rotate(180deg);
         }
-        
+
+        /* ★v2.2:座席を「番号行 + 名前行」の2行レイアウトに変更
+           番号と名前が重ならないよう grid-template-rows で厳密分離 */
         .print-seat {
             width: 100%;
-            min-height: 80px; /* デフォルトの最小高さ */
-            aspect-ratio: 1.2 / 1; /* アスペクト比で高さを自動調整 */
+            min-height: 60px;
+            display: grid;
+            grid-template-rows: auto 1fr;  /* 上=番号(自動), 下=名前(残り全部) */
+            grid-template-columns: 1fr;
+            border-radius: 4px;
+            border: 1px solid #ccc;
+            padding: 2px 3px;
+            text-align: center;
+            line-height: 1.1;
+            position: relative;
+            overflow: hidden;
+            box-sizing: border-box;
+            font-size: 18px;
+        }
+
+        /* 上段:番号エリア(出席番号 or 座席番号) */
+        .print-seat-header {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            min-height: 14px;
+            padding: 0 1px;
+        }
+        .print-seat-number {
+            font-size: 11px;
+            color: #888;
+            font-weight: normal;
+            line-height: 1;
+        }
+        .print-seat-number.has-student-number {
+            font-weight: bold;
+            color: #333;
+            background-color: rgba(255, 255, 255, 0.85);
+            padding: 1px 4px;
+            border-radius: 2px;
+            font-size: 12px;
+        }
+
+        /* 下段:名前+ふりがな */
+        .print-seat-body {
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            border-radius: 4px;
-            border: 1px solid #ccc;
-            padding: 5px;
-            text-align: center;
-            font-size: 18px; /* 基本サイズ - 動的に調整される */
-            line-height: 1.1;
-            position: relative; /* 番号表示のため */
-            overflow: hidden; /* オーバーフローを隠す */
-            box-sizing: border-box; /* ボックスサイズを固定 */
+            overflow: hidden;
+            padding: 0 2px;
         }
-        
-        /* 行数に応じた座席の高さ調整 */
-        .print-seating-grid.rows-7 .print-seat {
-            min-height: 70px;
-            height: 70px;
-            justify-content: flex-start; /* 上から配置してふりがながめり込まないように */
-            padding: 5px; /* パディングを標準に */
-            gap: 5px; /* ふりがなと名前の間を適度に開ける */
-            font-size: 16px; /* 全体のベースサイズを少し小さく */
-        }
-        
-        /* 7行のときは出席番号を小さく */
-        .print-seating-grid.rows-7 .print-seat-number {
+        .print-seat-furigana {
             font-size: 0.5em;
+            color: #666;
+            line-height: 1;
+            margin-bottom: 1px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
         }
-        
-        .print-seating-grid.rows-7 .print-seat-number.has-student-number {
-            font-size: 0.65em;
-            padding: 2px 5px;
-        }
-        
-        /* 7行のときはふりがなも少し小さく */
-        .print-seating-grid.rows-7 .print-seat-furigana {
-            font-size: 0.65em;
-            padding-left: 10px;
-        }
-        
-        /* 7行のときは名前のmin-heightを削除 */
-        .print-seating-grid.rows-7 .print-seat-name {
-            min-height: auto;
-        }
-        
-        .print-seating-grid.rows-6 .print-seat {
-            min-height: 80px;
-            height: 80px;
-        }
-        
-        .print-seat-number {
-            position: absolute;
-            top: 2px;
-            left: 2px;
-            font-size: 0.6em;
-            color: #888;
-            font-weight: normal;
-        }
-        
-        .print-seat-number.has-student-number {
-            font-weight: bold;
-            background-color: rgba(255, 255, 255, 0.9);
-            padding: 3px 6px;
-            border-radius: 3px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-            font-size: 0.75em;
-        }
-        
         .print-seat-name {
             font-weight: bold;
-            width: 100%;
-            white-space: normal; /* 改行を許可 */
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            min-height: 2.2em; /* 名前用の最小高さを確保 */
+            line-height: 1.1;
+            white-space: nowrap;  /* ★v2.2:絶対に1行 */
+            overflow: hidden;
+            text-overflow: clip;
+            max-width: 100%;
         }
-        
-        .print-seat-furigana {
-            font-size: 0.7em;
-            color: #666;
-            width: 100%;
-            white-space: normal;
-            padding-left: 10px; /* 出席番号のスペースを確保 */
-            box-sizing: border-box;
-        }
-        
+
         .print-seat.empty {
             border: 1px dashed #ddd;
             color: #999;
         }
-        
+        .print-seat.empty .print-seat-name {
+            font-weight: normal;
+            font-size: 12px;
+        }
+
         /* 文字サイズのプリセット */
-        .print-seating-grid.font-auto .print-seat { font-size: var(--auto-font-size, 22px); }
-        .print-seating-grid.font-large .print-seat { font-size: 30px; }
-        .print-seating-grid.font-medium .print-seat { font-size: 24px; }
-        .print-seating-grid.font-small .print-seat { font-size: 18px; }
+        .print-seating-grid.font-auto .print-seat-name { font-size: var(--auto-font-size, 18px); }
+        .print-seating-grid.font-large .print-seat-name { font-size: 26px; }
+        .print-seating-grid.font-medium .print-seat-name { font-size: 20px; }
+        .print-seating-grid.font-small .print-seat-name { font-size: 14px; }
         
         @media print {
             body * {
@@ -346,36 +319,8 @@ document.addEventListener('DOMContentLoaded', () => {
             #print-area {
                 width: 100%;
                 height: auto;
-                padding: 20mm 10mm 10mm 10mm;
+                padding: 6mm 8mm 6mm 8mm;
                 transform: none;
-            }
-            /* 印刷時はアスペクト比を無効化し、高さを固定 */
-            .print-seat {
-                aspect-ratio: auto;
-            }
-            
-            /* 印刷時も行数に応じた高さを適用 */
-            .print-seating-grid.rows-7 .print-seat {
-                height: 70px !important;
-                min-height: 70px !important;
-                justify-content: flex-start !important;
-                padding: 5px !important;
-                gap: 5px !important;
-                font-size: 16px !important;
-            }
-            
-            .print-seating-grid.rows-7 .print-seat-furigana {
-                font-size: 0.65em !important;
-                padding-left: 10px !important;
-            }
-            
-            .print-seating-grid.rows-7 .print-seat-name {
-                min-height: auto !important;
-            }
-            
-            .print-seating-grid.rows-6 .print-seat {
-                height: 80px !important;
-                min-height: 80px !important;
             }
             @page {
                 size: B5 landscape;
@@ -403,12 +348,15 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 設定変更時のイベント
     document.getElementById('optimize-layout').addEventListener('change', generatePrintPreview);
-    document.getElementById('show-header').addEventListener('change', () => {
-        document.getElementById('print-header').style.display = 
-            document.getElementById('show-header').checked ? 'block' : 'none';
+    document.getElementById('show-date').addEventListener('change', () => {
+        const dateEl = document.querySelector('.print-date-inline');
+        if (dateEl) {
+            dateEl.style.display = document.getElementById('show-date').checked ? 'inline' : 'none';
+        }
     });
     document.getElementById('print-title').addEventListener('input', (e) => {
-        document.getElementById('print-title-display').textContent = e.target.value;
+        const deskEl = document.querySelector('.print-teacher-desk');
+        if (deskEl) deskEl.textContent = e.target.value || '教卓';
     });
     document.getElementById('font-size-option').addEventListener('change', () => {
         updateFontSizeClass();
@@ -424,164 +372,113 @@ document.addEventListener('DOMContentLoaded', () => {
         return teacherViewBtn && teacherViewBtn.classList.contains('active');
     }
     
-    // 印刷プレビューを生成する関数
+    // 印刷プレビューを生成する関数 ★v2.2:大幅改訂
     function generatePrintPreview() {
-        // 全体のコンテナを取得
         const printClassroom = document.getElementById('print-classroom');
         printClassroom.innerHTML = '';
-        
-        // 現在の日付をフォーマット
-        const now = new Date();
-        document.getElementById('print-date').textContent = 
-            `(${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日)`;
-        
-        // ★★★ 現在表示中の教員視点を取得（修正） ★★★
+
         const currentIsTeacherView = isCurrentlyTeacherView();
-        console.log("現在の教員視点: ", currentIsTeacherView);
-        
-        // ★★★ 教員視点に応じたレイアウト構築 ★★★
-        // 教員視点なら「座席→教卓」の順、通常なら「教卓→座席」の順
-        let structure = [];
-        
-        if (currentIsTeacherView) {
-            // 教員視点: 上から「座席→教卓」
-            structure = ['grid', 'desk'];
-        } else {
-            // 通常視点: 上から「教卓→座席」
-            structure = ['desk', 'grid'];
+
+        // ─── 教卓ブロック(教卓+日付横並び) ──────────
+        const teacherRow = document.createElement('div');
+        teacherRow.className = 'print-teacher-row';
+
+        const teacherDesk = document.createElement('div');
+        teacherDesk.className = 'print-teacher-desk';
+        teacherDesk.textContent = document.getElementById('print-title').value || '教卓';
+
+        const dateInline = document.createElement('span');
+        dateInline.className = 'print-date-inline';
+        const now = new Date();
+        dateInline.textContent = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+        if (!document.getElementById('show-date').checked) {
+            dateInline.style.display = 'none';
         }
-        
-        // 構造に従ってDOMを構築
+
+        teacherRow.appendChild(teacherDesk);
+        teacherRow.appendChild(dateInline);
+
+        // ─── 座席グリッド ────────────────────────────
         const printSeatingGrid = document.createElement('div');
         printSeatingGrid.id = 'print-seating-grid';
         printSeatingGrid.className = 'print-seating-grid';
-        
-        const teacherDesk = document.createElement('div');
-        teacherDesk.className = 'print-teacher-desk';
-        teacherDesk.textContent = '教卓';
-        
-        // ★★★ 教員視点時のみグリッドにteacher-viewクラスを追加 ★★★
+
         if (currentIsTeacherView) {
             printSeatingGrid.classList.add('teacher-view');
-            console.log("座席グリッドにteacher-viewクラスを適用");
         }
-        
-        // 構造に従って要素を追加
-        structure.forEach(item => {
-            if (item === 'desk') {
-                printClassroom.appendChild(teacherDesk);
-            } else if (item === 'grid') {
-                printClassroom.appendChild(printSeatingGrid);
-            }
-        });
-        
-        // 座席データを取得
+
+        // ─── 構造構築:教卓→座席 / 教員視点なら座席→教卓 ─
+        if (currentIsTeacherView) {
+            printClassroom.appendChild(printSeatingGrid);
+            printClassroom.appendChild(teacherRow);
+        } else {
+            printClassroom.appendChild(teacherRow);
+            printClassroom.appendChild(printSeatingGrid);
+        }
+
+        // ─── 座席データ ──────────────────────────────
         const { seats, assignments } = seatingData;
-        
-        // 最適化オプションの状態を取得
         const shouldOptimize = document.getElementById('optimize-layout').checked;
-        
-        // フォントサイズ設定を適用
         updateFontSizeClass();
-        
+
         if (shouldOptimize) {
-            // 使用されている座席の範囲を取得
             const usedSeats = getUsedSeatsRange(seats, assignments);
             if (!usedSeats) {
-                // 使用されている座席がない場合
                 printSeatingGrid.innerHTML = '<div class="no-seats-message">有効な座席がありません</div>';
                 return;
             }
-            
-            // グリッドのサイズを設定
             const gridColumns = usedSeats.maxCol - usedSeats.minCol + 1;
-            const gridRows = usedSeats.maxRow - usedSeats.minRow + 1;
-            
-            console.log("使用範囲:", usedSeats, "列数:", gridColumns, "行数:", gridRows);
-            
-            // 行数に応じたクラスをクリアしてから追加
-            printSeatingGrid.classList.remove('rows-5', 'rows-6', 'rows-7');
-            if (gridRows === 7) {
-                printSeatingGrid.classList.add('rows-7');
-            } else if (gridRows === 6) {
-                printSeatingGrid.classList.add('rows-6');
-            }
-            
-            // 横向きB5に最適化するため、列のサイズを調整
-            const columnWidth = 100 / gridColumns;
-            printSeatingGrid.style.gridTemplateColumns = `repeat(${gridColumns}, ${columnWidth}%)`;
-            
-            // 行の高さを行数に応じて調整
-            let seatHeight;
-            if (gridRows >= 7) {
-                seatHeight = '70px'; // 7行の場合
-            } else if (gridRows >= 6) {
-                seatHeight = '80px'; // 6行の場合
-            } else {
-                seatHeight = '80px'; // 5行以下は標準サイズ
-            }
-            printSeatingGrid.style.gridAutoRows = `minmax(${seatHeight}, auto)`;
-            
-            // 座席を追加（左上から順番に - CSSで回転されるのでこの順序は常に同じでOK）
+            printSeatingGrid.style.gridTemplateColumns = `repeat(${gridColumns}, 1fr)`;
+
             for (let row = usedSeats.minRow; row <= usedSeats.maxRow; row++) {
                 for (let col = usedSeats.minCol; col <= usedSeats.maxCol; col++) {
                     addPrintSeat(printSeatingGrid, row, col, usedSeats);
                 }
             }
         } else {
-            // 全ての座席を表示（最適化なし）
             printSeatingGrid.style.gridTemplateColumns = `repeat(${COLS}, 1fr)`;
-            
-            // 座席を追加（左上から順番に - CSSで回転されるのでこの順序は常に同じでOK）
             for (let row = 0; row < ROWS; row++) {
                 for (let col = 0; col < COLS; col++) {
                     addPrintSeat(printSeatingGrid, row, col);
                 }
             }
         }
-        
-        // 自動フォントサイズの場合は計算して適用
+
+        // 自動フォントサイズの計算は座席DOMが揃った後に
         if (document.getElementById('font-size-option').value === 'auto') {
-            calculateOptimalFontSize();
+            // requestAnimationFrameで実DOMサイズが確定してから計算
+            requestAnimationFrame(() => calculateOptimalFontSize());
         }
     }
-    
-    // 印刷用の座席要素を追加する関数
+
+    // 印刷用の座席要素を追加する関数 ★v2.2:番号と名前を構造的に分離
     function addPrintSeat(container, row, col, usedSeats = null) {
-        // 座席データの取得
         const seatData = seatingData.seats[row][col];
         const student = seatingData.assignments[row][col];
-        
-        // 最適化モードでかつ、座席範囲外の場合はスキップ
-        if (usedSeats && (row < usedSeats.minRow || row > usedSeats.maxRow || 
+
+        if (usedSeats && (row < usedSeats.minRow || row > usedSeats.maxRow ||
                          col < usedSeats.minCol || col > usedSeats.maxCol)) {
             return;
         }
-        
-        // 座席番号を生成（A1, B2など）
+
         const seatNumber = `${String.fromCharCode(65 + col)}${row + 1}`;
-        
         const seatDiv = document.createElement('div');
         seatDiv.className = 'print-seat';
-        
-        // 座席が無効の場合は薄く表示
+
         if (!seatData.enabled) {
             seatDiv.className += ' empty';
             seatDiv.innerHTML = `
-                <div class="print-seat-number">${seatNumber}</div>
-                <div class="print-seat-name">-</div>
+                <div class="print-seat-header">
+                    <span class="print-seat-number">${seatNumber}</span>
+                </div>
+                <div class="print-seat-body">
+                    <div class="print-seat-name">-</div>
+                </div>
             `;
         } else if (student) {
-            // 生徒が割り当てられている場合
-            let furiganaHtml = '';
-            if (student.furigana) {
-                furiganaHtml = `<div class="print-seat-furigana">${student.furigana}</div>`;
-            }
-            
-            // 性別に応じた背景色と文字色を取得
+            // 性別による色分け
             let bgColor = colorSettings.defaultColor;
             let textColor = getTextColor(colorSettings.defaultColor);
-            
             if (colorSettings.enableGenderColors && student.gender) {
                 if (student.gender === '男') {
                     bgColor = colorSettings.maleColor;
@@ -591,34 +488,40 @@ document.addEventListener('DOMContentLoaded', () => {
                     textColor = getTextColor(colorSettings.femaleColor);
                 }
             }
-            
-            // 出席番号がある場合は番号を表示、ない場合は座席番号を表示
-            let seatNumberHtml;
+
+            // 番号:出席番号があればそれ、なければ座席番号
+            let numberHtml;
             if (student.number) {
-                // 出席番号を表示（太字、白背景、名前と同じ文字色）
-                seatNumberHtml = `<div class="print-seat-number has-student-number" style="color: ${textColor};">${student.number}</div>`;
+                numberHtml = `<span class="print-seat-number has-student-number">${student.number}</span>`;
             } else {
-                // 通常の座席番号
-                seatNumberHtml = `<div class="print-seat-number">${seatNumber}</div>`;
+                numberHtml = `<span class="print-seat-number">${seatNumber}</span>`;
             }
-            
+
+            const furiganaHtml = student.furigana
+                ? `<div class="print-seat-furigana">${student.furigana}</div>`
+                : '';
+
             seatDiv.innerHTML = `
-                ${seatNumberHtml}
-                ${furiganaHtml}
-                <div class="print-seat-name">${student.name}</div>
+                <div class="print-seat-header">${numberHtml}</div>
+                <div class="print-seat-body">
+                    ${furiganaHtml}
+                    <div class="print-seat-name">${student.name}</div>
+                </div>
             `;
-            
-            // 背景色と文字色を適用
             seatDiv.style.backgroundColor = bgColor;
             seatDiv.style.color = textColor;
         } else {
-            // 有効だが空席の場合
+            // 有効だが空席
             seatDiv.innerHTML = `
-                <div class="print-seat-number">${seatNumber}</div>
-                <div class="print-seat-name">空席</div>
+                <div class="print-seat-header">
+                    <span class="print-seat-number">${seatNumber}</span>
+                </div>
+                <div class="print-seat-body">
+                    <div class="print-seat-name">空席</div>
+                </div>
             `;
         }
-        
+
         container.appendChild(seatDiv);
     }
     
@@ -634,87 +537,66 @@ document.addEventListener('DOMContentLoaded', () => {
         printSeatingGrid.classList.add(`font-${fontSizeOption}`);
     }
     
-    // 最適なフォントサイズを計算して適用
+    /**
+     * ★v2.2:最適フォントサイズの動的計算
+     * 各セルの実幅と名前文字数から、その名前が「1行に収まる最大サイズ」を逆算する。
+     * これによって5文字でも6文字でも、列幅の許す限りでは1行に表示される。
+     */
     function calculateOptimalFontSize() {
         const printSeatingGrid = document.getElementById('print-seating-grid');
+        if (!printSeatingGrid) return;
         const seats = printSeatingGrid.querySelectorAll('.print-seat');
         if (!seats.length) return;
-        
-        // グリッドの列数を取得
+
         const gridStyle = window.getComputedStyle(printSeatingGrid);
-        const gridTemplateColumns = gridStyle.getPropertyValue('grid-template-columns');
-        const columnCount = gridTemplateColumns.split(' ').length;
-        
-        // 行数も取得（概算）
-        const rowCount = Math.ceil(seats.length / columnCount);
-        
-        // 列数に基づいて基本フォントサイズを決定（控えめに設定）
-        let baseFontSize;
-        
-        if (columnCount <= 4) {
-            baseFontSize = 32;
-        } else if (columnCount === 5) {
-            baseFontSize = 28;
-        } else if (columnCount === 6) {
-            baseFontSize = 24;
-        } else if (columnCount === 7) {
-            baseFontSize = 12; // 7列はかなり小さく
-        } else {
-            baseFontSize = 10; // 8列は非常に小さく
-        }
-        
-        console.log("自動フォントサイズ計算:", {columnCount, rowCount, baseFontSize});
-        
-        // カスタムプロパティとして設定
-        printSeatingGrid.style.setProperty('--auto-font-size', `${baseFontSize}px`);
-        
-        // 名前の長さに基づいて個別調整（案2：列数も考慮）
+        const columnCount = gridStyle.getPropertyValue('grid-template-columns').split(' ').length;
+
+        // 列数別の上限・下限フォントサイズ(プレビュー時の見た目基準)
+        // ※ #print-area は scale(0.5) なので、ここのpx値はB5上の実サイズ基準
+        const sizeBounds = {
+            4:  { max: 32, min: 18 },
+            5:  { max: 28, min: 16 },
+            6:  { max: 24, min: 14 },
+            7:  { max: 20, min: 12 },
+            8:  { max: 18, min: 10 }
+        };
+        const bounds = sizeBounds[columnCount] || { max: 18, min: 10 };
+
+        // 日本語1文字あたりの幅係数(font-sizeに対する文字幅の比率)
+        // 全角文字は概ね font-size と同じ幅を取るので 1.0 だが、padding等も考えて 1.05 で余裕を見る
+        const CHAR_WIDTH_RATIO = 1.05;
+
         seats.forEach(seat => {
             const nameElement = seat.querySelector('.print-seat-name');
-            if (nameElement) {
-                const nameLength = nameElement.textContent.length;
-                
-                // 6列以下かつ4文字以上 → 縮小（スペース含む短い名前にも対応）
-                if (columnCount <= 6 && nameLength >= 4) {
-                    if (nameLength >= 7) {
-                        seat.style.setProperty('font-size', `${baseFontSize * 0.7}px`, 'important'); // 7文字以上
-                    } else if (nameLength === 6) {
-                        seat.style.setProperty('font-size', `${baseFontSize * 0.75}px`, 'important'); // 6文字
-                    } else if (nameLength === 5) {
-                        seat.style.setProperty('font-size', `${baseFontSize * 0.8}px`, 'important'); // 5文字
-                    } else if (nameLength === 4) {
-                        seat.style.setProperty('font-size', `${baseFontSize * 0.85}px`, 'important'); // 4文字
-                    }
-                } else if (columnCount === 7 && nameLength >= 4) {
-                    // 7列の場合は4文字以上で縮小
-                    if (nameLength > 7) {
-                        seat.style.setProperty('font-size', `${baseFontSize * 0.8}px`, 'important');
-                    } else if (nameLength > 5) {
-                        seat.style.setProperty('font-size', `${baseFontSize * 0.85}px`, 'important');
-                    } else if (nameLength >= 4) {
-                        seat.style.setProperty('font-size', `${baseFontSize * 0.9}px`, 'important');
-                    }
-                }
-                
-                // ふりがなが長い場合の追加調整
-                const furiganaElement = seat.querySelector('.print-seat-furigana');
-                if (furiganaElement) {
-                    const furiganaLength = furiganaElement.textContent.length;
-                    console.log("ふりがなチェック:", furiganaElement.textContent, "長さ:", furiganaLength);
-                    if (furiganaLength > 10) {
-                        // ふりがなが長い場合は、さらに全体を小さく（70%に縮小）
-                        const currentSize = parseFloat(seat.style.fontSize || baseFontSize);
-                        const newSize = currentSize * 0.7;
-                        seat.style.setProperty('font-size', `${newSize}px`, 'important');
-                        
-                        // 縮小するとパディングも小さくなるので、ふりがなのパディングを増やす
-                        furiganaElement.style.setProperty('padding-left', '20px', 'important');
-                        
-                        console.log("ふりがな長い！縮小:", currentSize, "→", newSize, "+ パディング20px");
-                    }
-                }
+            if (!nameElement) return;
+
+            const nameText = nameElement.textContent;
+            const nameLength = nameText.length;
+            if (nameLength === 0) return;
+
+            // セル本体の幅(プレビュー上の実測px)から、内側のpadding(2*3=6px)を引いた利用可能幅
+            const cellWidth = seat.clientWidth - 6;
+            if (cellWidth <= 0) return;
+
+            // 「nameLength文字」がcellWidthに収まる最大font-sizeを逆算
+            // cellWidth = nameLength * fontSize * CHAR_WIDTH_RATIO
+            // → fontSize = cellWidth / (nameLength * CHAR_WIDTH_RATIO)
+            let optimalSize = Math.floor(cellWidth / (nameLength * CHAR_WIDTH_RATIO));
+
+            // 上限・下限でクランプ
+            optimalSize = Math.min(bounds.max, Math.max(bounds.min, optimalSize));
+
+            nameElement.style.setProperty('font-size', `${optimalSize}px`, 'important');
+
+            // ふりがなは名前のさらに半分くらいで(最低8px)
+            const furiganaElement = seat.querySelector('.print-seat-furigana');
+            if (furiganaElement) {
+                const furiganaSize = Math.max(8, Math.floor(optimalSize * 0.55));
+                furiganaElement.style.setProperty('font-size', `${furiganaSize}px`, 'important');
             }
         });
+
+        console.log('動的フォント計算完了:', { columnCount, bounds });
     }
     
     // 使用中の座席の範囲を取得する関数

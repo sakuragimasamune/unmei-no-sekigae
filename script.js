@@ -697,10 +697,17 @@ function startSlot() {
         alert(`${selectedStudent.name}さんが座れる席がありません!`);
         return;
     }
+
+    // ★v2.4:名前スロットも回転させる
+    //   - 視覚用に全員の名前を渡す(回転して見える)
+    //   - 性別整合性チェックで決まった selectedStudent.name で必ず停止
+    const allNames = availableStudents.map(s => s.name);
+
     window.slotMachine.start(
-        [selectedStudent.name],
+        allNames,
         availableColumns,
-        () => (colLetter) => getAvailableRows(colLetter, selectedStudent)
+        () => (colLetter) => getAvailableRows(colLetter, selectedStudent),
+        selectedStudent.name  // ★第4引数:確定する名前
     );
 }
 

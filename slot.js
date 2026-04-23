@@ -483,19 +483,22 @@ class SlotMachine {
     }
 
 
-    async start(names, availableColumns, getAvailableRowsCallback) {
+    async start(names, availableColumns, getAvailableRowsCallback, fixedName = null) {
         if (!this.effectManager) {
             this.effectManager = new SpecialEffectManager();
         }
-        
+
         this.reunionEventInProgress = false;
 
         // ラストワンチャレンジのチェック
         const lastOneChallengeEnabled = localStorage.getItem('lastOneChallengeEnabled');
         const shouldEnableLastOne = lastOneChallengeEnabled === 'true' || lastOneChallengeEnabled === null;
-        
-        if (shouldEnableLastOne && names.length === 1 && this.isLastStudent()) {
-            await this.playLastOneChallenge(names[0]);
+
+        if (shouldEnableLastOne && this.isLastStudent()) {
+            // ★v2.4:isLastStudentで判定(以前は names.length===1 だったが
+            //   全員の名前を渡すようになったので残り席数で判定する)
+            const lastName = fixedName !== null ? fixedName : names[0];
+            await this.playLastOneChallenge(lastName);
             return;
         }
 
@@ -510,10 +513,13 @@ class SlotMachine {
         this.isRunning = true;
 
         // 1. 内部的に全ての抽選を行う
-        const selectedName = names[Math.floor(Math.random() * names.length)];
+        // ★v2.4:fixedNameが渡されていればそれを優先(性別整合性チェック済み)
+        const selectedName = fixedName !== null
+            ? fixedName
+            : names[Math.floor(Math.random() * names.length)];
         const selectedCol = availableColumns[Math.floor(Math.random() * availableColumns.length)];
         const availableRows = getAvailableRowsCallback()(selectedCol);
-        
+
         if (!availableRows.length) {
             alert('選択された列に利用可能な行がありません。もう一度試してください。');
             this.stop();
@@ -524,10 +530,10 @@ class SlotMachine {
         // 2. 特殊演出の判定
         const effectiveRows = this.effectManager.findEffectiveRows(seatingData.seats);
         const selectedRowNum = parseInt(selectedRow);
-        const isFrontBack = selectedRowNum === effectiveRows.first || 
+        const isFrontBack = selectedRowNum === effectiveRows.first ||
                            selectedRowNum === effectiveRows.last;
         const isWindow = selectedCol === 'A';
-        
+
         const shouldShowFrontBack = isFrontBack && this.effectManager.shouldTriggerFrontBackEffect();
         const shouldShowWindow = isWindow && this.effectManager.shouldTriggerWindowEffect();
 
@@ -594,7 +600,7 @@ class SlotMachine {
 
         // シャッフルイベントのチェック ★v2.1:順序を明確に
         if (window.shuffleEvent.shouldTrigger()) {
-            // 1. 「地獄の席替え発動！！」の赤黒オーバーレイ(3秒)
+            // 1. 「地獄のシャッフル発動！！」の赤黒オーバーレイ(3秒)
             await window.shuffleEvent.playShuffleEffect();
             // 2. 席が「ぐいーん」と回転して入れ替わる(アニメ完了まで1秒待つ)
             await window.shuffleEvent.shuffleSeats();
@@ -1281,7 +1287,7 @@ class ShuffleEvent {
 
         const messageDiv = document.createElement('div');
         messageDiv.className = 'special-effect-message hell';
-        messageDiv.textContent = '地獄の席替え発動！！';
+        messageDiv.textContent = '地獄のシャッフル発動！！';
 
         container.appendChild(messageDiv);
         overlay.appendChild(container);
