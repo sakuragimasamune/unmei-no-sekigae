@@ -4,6 +4,7 @@
 
 スロットマシン形式の抽選、運命の再会・地獄のシャッフル・ラストワンチャレンジなどの特殊演出、Web Audio APIによる効果音、印刷機能まで、席替え当日の盛り上がりに必要なものを一通り揃えています。
 
+単一のHTMLファイルとJavaScriptで動作するため、サーバー不要。GitHub Pagesに置くだけで全クラスからアクセス可能。
 
 ---
 
@@ -24,6 +25,9 @@
 - **データ保存**: localStorageで自動保存、JSONエクスポート/インポートで他PCに移送可能
 - **ドラッグ&ドロップ**: 確定後の手動入れ替えにも対応（性別制限チェック付き）
 
+## デモ
+
+GitHub Pagesでホスティング後、`https://<username>.github.io/<repo-name>/` でアクセス可能。
 
 ## 使い方
 
@@ -56,13 +60,16 @@
 ## 技術構成
 
 ```
-index.html       メインページ（全モーダル含む）
-styles.css       全体スタイル（CSS変数で色・サイズを集約）
-sound.js         Web Audio APIによる効果音合成
-fortune.js       席替え占いメッセージのデフォルトセット
-slot.js          スロットマシン本体・特殊演出
-print.js         印刷プレビュー・印刷機能
-script.js        メインロジック・座席管理・データ永続化
+index.html         メインページ（全モーダル含む）
+styles.css         全体スタイル（CSS変数で色・サイズを集約）
+sound.js           Web Audio APIによる効果音合成
+fortune.js         席替え占いメッセージのデフォルトセット
+slot.js            スロットマシン本体・特殊演出
+print.js           印刷プレビュー・印刷機能
+script.js          メインロジック・座席管理・データ永続化
+manifest.json      PWAマニフェスト(アプリ名・アイコン・テーマ)
+service-worker.js  オフライン対応のキャッシュ管理
+icon.svg           アプリアイコン
 ```
 
 依存ライブラリなし。すべてVanilla JavaScript。
@@ -73,6 +80,69 @@ script.js        メインロジック・座席管理・データ永続化
 - 旧データ形式を自動マイグレーション（7列→8列、ブール値→オブジェクト形式）
 - レスポンシブ対応：教室PC・タブレットでも崩れない
 - 印刷専用CSSとプレビュー用CSSを分離
+
+## デプロイ手順（GitHub Pages）
+
+職場のファイルサーバーにJSが上げられない場合、GitHub Pagesでホスティングするのが最も簡単。
+
+```bash
+# 1. リポジトリ作成後、ローカルにクローン
+git clone https://github.com/<username>/<repo-name>.git
+cd <repo-name>
+
+# 2. ファイルをコピーしてpush
+cp -r /path/to/seat-app/* .
+git add .
+git commit -m "Initial commit"
+git push origin main
+```
+
+その後GitHubのリポジトリページで:
+
+1. **Settings** → **Pages**
+2. **Source**: `Deploy from a branch`
+3. **Branch**: `main` / `(root)`
+4. **Save** をクリック
+5. 数分待つと `https://<username>.github.io/<repo-name>/` でアクセス可能に
+
+教室PCのブラウザにこのURLをブックマークしておけば、毎回そこからアクセスできます。
+
+## アプリとしてインストールする(PWA対応)
+
+このアプリはPWA (Progressive Web App) として動作するため、ブラウザから「インストール」してデスクトップアプリのように使えます。インストールすると：
+
+- **オフライン動作**: ネットがなくても起動できる(席替え当日にネットが落ちても安心)
+- **デスクトップアイコン化**: ブラウザを立ち上げる必要なし
+- **独立ウィンドウ**: アドレスバーが消えて本物のアプリのよう
+- **localStorage は維持**: 名簿・座席設定・履歴はそのまま使える
+
+### インストール方法
+
+GitHub Pagesに公開した後、`https://<username>.github.io/<repo-name>/` にアクセスすると、ブラウザがインストールを提案します。
+
+**Windows / Mac (Chrome / Edge)**:
+- アドレスバー右端に出る「インストール」アイコン(⊕またはモニターのアイコン)をクリック
+- メニューから「インストール」 / 「アプリとしてインストール」
+
+**iPhone / iPad (Safari)**:
+- 共有ボタン → 「ホーム画面に追加」
+
+**Android (Chrome)**:
+- メニュー(︙) → 「アプリをインストール」 / 「ホーム画面に追加」
+
+インストール後はスタートメニュー / アプリ一覧 / ホーム画面から起動可能。
+
+### アプリの更新
+
+アプリのファイル(JS/CSS)を更新したときは、`service-worker.js` の `CACHE_VERSION` をインクリメント(例: `v2.5.0` → `v2.5.1`)してpush。次回起動時に新しいキャッシュが取得されます。
+
+### プライベートリポジトリで使いたい場合
+
+GitHub Free アカウントでも、プライベートリポジトリでGitHub Pagesを使うには Pro プラン（$4/月）が必要です。学校で公開したくない場合は：
+
+- **Cloudflare Pages**（無料・プライベートリポジトリOK）
+- **Netlify**（無料枠あり）
+- **ローカル配置**: 教室PCに直接ファイル一式を置いて `index.html` を開くだけでも動作
 
 ## カスタマイズ
 

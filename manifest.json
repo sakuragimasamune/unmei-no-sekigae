@@ -1,0 +1,22 @@
+{
+  "name": "座席配置システム",
+  "short_name": "席替え",
+  "description": "教室の席替えを楽しいイベントに変える、ブラウザで動く席替えアプリ",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#f5f5f5",
+  "theme_color": "#4a90e2",
+  "lang": "ja",
+  "dir": "ltr",
+  "categories": ["education", "productivity"],
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

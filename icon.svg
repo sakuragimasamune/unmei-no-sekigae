@@ -1,0 +1,36 @@
+<svg viewBox="0 0 512 512" xmlns="http://www.w3.org/2000/svg">
+  <!-- 背景(maskable対応:全面塗りつぶし) -->
+  <rect width="512" height="512" fill="#4a90e2"/>
+
+  <!-- 教卓 -->
+  <rect x="200" y="120" width="112" height="36" rx="6" fill="#2c3e50"/>
+
+  <!-- 座席グリッド 4×3 -->
+  <g>
+    <!-- 1行目 -->
+    <rect x="100" y="184" width="76" height="56" rx="8" fill="#e3f2fd"/>
+    <rect x="184" y="184" width="76" height="56" rx="8" fill="#e3f2fd"/>
+    <rect x="268" y="184" width="76" height="56" rx="8" fill="#e3f2fd"/>
+    <rect x="352" y="184" width="76" height="56" rx="8" fill="#e3f2fd"/>
+    <!-- 2行目:真ん中にラッキーシート -->
+    <rect x="100" y="252" width="76" height="56" rx="8" fill="#e3f2fd"/>
+    <rect x="184" y="252" width="76" height="56" rx="8" fill="#FFD700"
+          stroke="#FFA500" stroke-width="3"/>
+    <rect x="268" y="252" width="76" height="56" rx="8" fill="#e3f2fd"/>
+    <rect x="352" y="252" width="76" height="56" rx="8" fill="#e3f2fd"/>
+    <!-- 3行目 -->
+    <rect x="100" y="320" width="76" height="56" rx="8" fill="#e3f2fd"/>
+    <rect x="184" y="320" width="76" height="56" rx="8" fill="#e3f2fd"/>
+    <rect x="268" y="320" width="76" height="56" rx="8" fill="#e3f2fd"/>
+    <rect x="352" y="320" width="76" height="56" rx="8" fill="#e3f2fd"/>
+  </g>
+
+  <!-- ラッキーシートに当選星 -->
+  <path d="M 222 264 L 226 277 L 240 277 L 229 285 L 233 298 L 222 290 L 211 298 L 215 285 L 204 277 L 218 277 Z"
+        fill="#fff" stroke="#FF8C00" stroke-width="1.5"/>
+
+  <!-- キラキラ装飾 -->
+  <circle cx="160" cy="270" r="3" fill="#FFD700" opacity="0.8"/>
+  <circle cx="290" cy="280" r="2" fill="#FFD700" opacity="0.8"/>
+  <circle cx="270" cy="270" r="3" fill="#FFD700" opacity="0.7"/>
+</svg>
