@@ -719,12 +719,13 @@ body {
     .btn { padding: 8px 14px; font-size: 13px; }
 }
 
-/* 印刷時:画面用UIを完全に隠す(印刷用CSSはprint.js内で詳細指定) */
+/* 印刷時:画面用UIを完全に隠す(印刷用CSSはprint.js内で詳細指定)
+   ★重要:印刷プレビューモーダルだけは除外 — これが消えると印刷真っ白になる */
 @media print {
     #button-container,
     #setting-mode-alert,
     .subbuttons-container,
-    .modal {
+    .modal:not(#print-preview-modal) {
         display: none !important;
     }
 }

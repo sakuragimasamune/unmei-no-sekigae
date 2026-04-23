@@ -539,23 +539,21 @@ class SlotMachine {
         // 4. 名前のスロットが止まるのを待つ
         const finalName = await nameSlot.promise;
 
-        // 5. 特殊演出の表示(名前が決まった後)
+        // 5. 特殊演出の表示(名前が決まった後)★v2.1:pauseせずextendでスロットを回し続ける
         if (shouldShowFrontBack || shouldShowWindow) {
-            colSlot.controller.pause();
-            rowSlot.controller.pause();
-            
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
+            // 演出の長さ分、列・行スロットの終了時刻を延長(止まらないように)
+            const EFFECT_DURATION_MS = 2800;
+            colSlot.controller.extend(EFFECT_DURATION_MS);
+            rowSlot.controller.extend(EFFECT_DURATION_MS);
+
+            await new Promise(resolve => setTimeout(resolve, 300));
+
             if (shouldShowFrontBack) {
                 await this.effectManager.playSpecialEffect('front-back', '特別席確定！！');
             } else if (shouldShowWindow) {
                 await this.effectManager.playSpecialEffect('window', '窓際席確定！！');
             }
-            
-            await new Promise(resolve => setTimeout(resolve, 300));
-            
-            colSlot.controller.resume();
-            rowSlot.controller.resume();
+            // ここで3秒経過。列・行スロットは延長されているのでまだ回っている
         }
 
         // 6. 残りのスロットが止まるのを待つ
@@ -594,11 +592,13 @@ class SlotMachine {
             return;
         }
 
-        // シャッフルイベントのチェック
+        // シャッフルイベントのチェック ★v2.1:順序を明確に
         if (window.shuffleEvent.shouldTrigger()) {
+            // 1. 「地獄の席替え発動！！」の赤黒オーバーレイ(3秒)
             await window.shuffleEvent.playShuffleEffect();
-            window.shuffleEvent.shuffleSeats();
-            // ★Phase 3:シャッフル後の余韻
+            // 2. 席が「ぐいーん」と回転して入れ替わる(アニメ完了まで1秒待つ)
+            await window.shuffleEvent.shuffleSeats();
+            // 3. 白黒の余韻「運命が、変わってしまった……」
             await window.shuffleEvent.playShuffleAftermath();
         }
 
@@ -1081,13 +1081,14 @@ class SpecialEffectManager {
     }
 }
 
-// スロットのアニメーション(一時停止機能付き) ★Phase 3:音響追加
-SlotMachine.prototype.animateSlot = function(slotIndex, items, duration, fixedResult = null) {
+// スロットのアニメーション(一時停止機能付き) ★Phase 3:音響追加 ★v2.1:extend追加
+SlotMachine.prototype.animateSlot = function(slotIndex, items, initialDuration, fixedResult = null) {
     const slot = this.slots[slotIndex].querySelector('.slot-content');
     let startTime = Date.now();
     let pauseStartTime = null;
     let totalPausedTime = 0;
     let isPaused = false;
+    let duration = initialDuration;  // ★v2.1:letで宣言、extend可能に
     let lastDisplayedItem = null;
     const targetItem = fixedResult !== null ? fixedResult : items[Math.floor(Math.random() * items.length)];
 
@@ -1104,6 +1105,10 @@ SlotMachine.prototype.animateSlot = function(slotIndex, items, duration, fixedRe
                 totalPausedTime += Date.now() - pauseStartTime;
                 pauseStartTime = null;
             }
+        },
+        /** ★v2.1:演出中にスロットを止めないための duration 延長機能 */
+        extend: (additionalMs) => {
+            duration += additionalMs;
         }
     };
 
@@ -1206,10 +1211,11 @@ class ShuffleEvent {
         return availableSeats;
     }
 
-    shuffleSeats() {
+    /** ★v2.1:async化。シャッフルアニメーション(.shuffling 1秒)の完了を待てる */
+    async shuffleSeats() {
         // 元の配置を保存
         const originalAssignments = JSON.parse(JSON.stringify(seatingData.assignments));
-        
+
         // 全生徒のリストを作成
         const allStudents = [];
         for (let i = 0; i < originalAssignments.length; i++) {
@@ -1232,7 +1238,6 @@ class ShuffleEvent {
         for (const student of allStudents) {
             if (assignedStudents.has(student.name)) continue;
 
-            // 利用可能な席を探す
             const availableSeats = this.findAvailableSeats(
                 seatingData.seats,
                 student,
@@ -1240,34 +1245,28 @@ class ShuffleEvent {
             );
 
             if (availableSeats.length > 0) {
-                // ランダムに席を選択
                 const randomSeatIndex = Math.floor(Math.random() * availableSeats.length);
                 const { row, col } = availableSeats[randomSeatIndex];
-                
-                // 席を割り当て
                 newAssignments[row][col] = student;
                 assignedStudents.add(student.name);
             }
         }
 
-        // アニメーション用のクラスを追加
+        // アニメーション用のクラスを追加 → 席が「ぐいーん」と回転
         document.querySelectorAll('.seat').forEach(seat => {
             seat.classList.add('shuffling');
         });
 
         // 新しい配置を適用
         seatingData.assignments = newAssignments;
-        
-        // 保存して表示を更新
         saveToLocalStorage();
-        
-        // アニメーション完了後に表示を更新
-        setTimeout(() => {
-            document.querySelectorAll('.seat').forEach(seat => {
-                seat.classList.remove('shuffling');
-            });
-            initializeSeats();
-        }, 1000);
+
+        // ★v2.1:アニメ完了(1秒)を待ってからresolve
+        await new Promise(r => setTimeout(r, 1000));
+        document.querySelectorAll('.seat').forEach(seat => {
+            seat.classList.remove('shuffling');
+        });
+        initializeSeats();
     }
 
     async playShuffleEffect() {
@@ -1292,14 +1291,17 @@ class ShuffleEvent {
         overlay.remove();
     }
 
-    /** ★Phase 3:シャッフル後の余韻演出(モノローグ画面) */
+    /** ★v2.1:シャッフル後の余韻演出(モノクロ画面)
+     *  backdrop-filterで背景の席を白黒化し、「運命が、変わってしまった……」を重ねる */
     async playShuffleAftermath() {
         if (window.soundManager) window.soundManager.hellAftermath();
 
         const overlay = document.createElement('div');
         overlay.style.cssText = `
             position: fixed; inset: 0;
-            background: rgba(0, 0, 0, 0.92);
+            background: rgba(20, 20, 20, 0.35);
+            backdrop-filter: grayscale(100%) brightness(0.65) contrast(1.1);
+            -webkit-backdrop-filter: grayscale(100%) brightness(0.65) contrast(1.1);
             z-index: 1002;
             display: flex; justify-content: center; align-items: center;
             opacity: 0;
@@ -1307,10 +1309,16 @@ class ShuffleEvent {
         `;
         const message = document.createElement('div');
         message.style.cssText = `
-            color: #ddd; font-size: 56px; font-weight: bold;
-            text-align: center; line-height: 1.6;
-            text-shadow: 0 0 20px rgba(139, 0, 0, 0.8);
-            letter-spacing: 0.1em;
+            color: #fff;
+            font-size: 56px;
+            font-weight: bold;
+            text-align: center;
+            line-height: 1.6;
+            text-shadow:
+                0 0 20px rgba(0, 0, 0, 0.9),
+                2px 2px 4px rgba(0, 0, 0, 0.8);
+            letter-spacing: 0.15em;
+            filter: grayscale(100%);
         `;
         message.innerHTML = '運命が、<br>変わってしまった……';
         overlay.appendChild(message);
@@ -1319,7 +1327,7 @@ class ShuffleEvent {
         // フェードイン
         await new Promise(r => setTimeout(r, 50));
         overlay.style.opacity = '1';
-        // 表示
+        // 表示(余韻)
         await new Promise(r => setTimeout(r, 2800));
         // フェードアウト
         overlay.style.opacity = '0';

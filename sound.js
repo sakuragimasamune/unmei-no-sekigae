@@ -131,22 +131,44 @@ class SoundManager {
         });
     }
 
-    /** 特別席(前後列)ジャジャーン和音 */
+    /** 特別席(前後列)のパルス音「ぐいーんぐいーんぐいーんぐいーん」
+     *  文字の拡大縮小アニメに合わせて4回繰り返す */
     frontBackChord() {
         if (!this.enabled || !this.init()) return;
-        // C5 + E5 + G5 + C6 で華やかに
-        [523.25, 659.25, 783.99, 1046.5].forEach(freq => {
-            this._tone({ freq, duration: 0.7, type: 'triangle', startGain: 0.18 });
-        });
+        // 各回は周波数が上昇する「ぐいーん」。4回繰り返し、0.7秒間隔
+        const baseFreqs = [330, 415, 494]; // E4, G#4, B4 (不安定で華やかな和音)
+        for (let i = 0; i < 4; i++) {
+            baseFreqs.forEach(freq => {
+                this._tone({
+                    freq: freq,
+                    freqEnd: freq * 1.5,  // 1.5倍まで上昇 → 「ぐいーん」感
+                    duration: 0.45,
+                    type: 'triangle',
+                    startGain: 0.18,
+                    startTime: i * 0.7
+                });
+            });
+        }
     }
 
-    /** 窓際席シャラララ(高音アルペジオ) */
+    /** 窓際席シャラララ「ぴろりろり！ぴろりろり！ぴろりろり！ぴろりろり！」
+     *  高音アルペジオを4回繰り返す */
     windowSparkle() {
         if (!this.enabled || !this.init()) return;
-        const notes = [1046.5, 1318.5, 1568, 1975.5, 2349.3];
-        notes.forEach((freq, i) => {
-            this._tone({ freq, duration: 0.18, type: 'sine', startGain: 0.13, startTime: i * 0.05 });
-        });
+        const notes = [1046.5, 1318.5, 1568, 1975.5, 2349.3]; // C6,E6,G6,B6,D7
+        // 4回繰り返し、各回0.7秒
+        for (let set = 0; set < 4; set++) {
+            const setOffset = set * 0.7;
+            notes.forEach((freq, i) => {
+                this._tone({
+                    freq,
+                    duration: 0.15,
+                    type: 'sine',
+                    startGain: 0.14,
+                    startTime: setOffset + i * 0.04
+                });
+            });
+        }
     }
 
     /** 運命の再会(キュン♥) */
@@ -213,10 +235,58 @@ class SoundManager {
         this._tone({ freq: 1046.5, duration: 0.8, type: 'sine', startGain: 0.2, startTime: 0.1 });
     }
 
-    /** 交換イベント(シュッ) */
+    /** 交換イベント「ぶわっぶわっぶわっぶわわわー」悪魔的な下降音
+     *  短い下降音3回 → 最後にロング下降で不気味に締める */
     exchangeSwoosh() {
         if (!this.enabled || !this.init()) return;
-        this._tone({ freq: 200, freqEnd: 2000, duration: 0.35, type: 'sawtooth', startGain: 0.18 });
+        // 「ぶわっ」を3回(短い下降)
+        for (let i = 0; i < 3; i++) {
+            // 高めから中音域まで一気に下降
+            this._tone({
+                freq: 500,
+                freqEnd: 180,
+                duration: 0.22,
+                type: 'sawtooth',
+                startGain: 0.25,
+                startTime: i * 0.28
+            });
+            // 重ねて不気味さ(少し低音域)
+            this._tone({
+                freq: 280,
+                freqEnd: 100,
+                duration: 0.22,
+                type: 'square',
+                startGain: 0.15,
+                startTime: i * 0.28 + 0.02
+            });
+        }
+        // 「ぶわわわー」(ロング下降、悪魔の雄叫び風)
+        this._tone({
+            freq: 450,
+            freqEnd: 55,
+            duration: 1.4,
+            type: 'sawtooth',
+            startGain: 0.3,
+            startTime: 0.9
+        });
+        // さらに重ねて地の底に落ちる感じ
+        this._tone({
+            freq: 250,
+            freqEnd: 40,
+            duration: 1.4,
+            type: 'square',
+            startGain: 0.2,
+            startTime: 0.95
+        });
+        // 高周波のキーンをうっすら重ねて「ゾクッ」感
+        this._tone({
+            freq: 1200,
+            freqEnd: 300,
+            duration: 1.2,
+            type: 'sine',
+            startGain: 0.08,
+            startTime: 1.0
+        });
     }
 
     /** 完了ファンファーレ(全員配置完了) */

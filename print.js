@@ -312,7 +312,27 @@ document.addEventListener('DOMContentLoaded', () => {
             #print-area-wrapper, #print-area-wrapper * {
                 visibility: visible;
             }
-            /* ★ Phase 2修正:印刷時はwrapperを解除して全画面に */
+
+            /* ★印刷プレビューモーダルの装飾を剥がす
+               (モーダルの半透明黒背景、白パネル、設定UIなど全部消す) */
+            #print-preview-modal {
+                display: block !important;
+                position: static !important;
+                background: transparent !important;
+                overflow: visible !important;
+            }
+            #print-preview-modal .modal-content {
+                background: transparent !important;
+                box-shadow: none !important;
+                padding: 0 !important;
+                max-width: none !important;
+                max-height: none !important;
+                width: auto !important;
+                overflow: visible !important;
+                border-radius: 0 !important;
+            }
+
+            /* ★Phase 2修正:印刷時はwrapperを解除して全画面に */
             #print-area-wrapper {
                 width: auto;
                 height: auto;
