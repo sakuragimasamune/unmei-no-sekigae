@@ -4,7 +4,6 @@
 
 スロットマシン形式の抽選、運命の再会・地獄のシャッフル・ラストワンチャレンジなどの特殊演出、Web Audio APIによる効果音、印刷機能まで、席替え当日の盛り上がりに必要なものを一通り揃えています。
 
-単一のHTMLファイルとJavaScriptで動作するため、サーバー不要。GitHub Pagesに置くだけで全クラスからアクセス可能。
 
 ---
 
@@ -25,9 +24,6 @@
 - **データ保存**: localStorageで自動保存、JSONエクスポート/インポートで他PCに移送可能
 - **ドラッグ&ドロップ**: 確定後の手動入れ替えにも対応（性別制限チェック付き）
 
-## デモ
-
-GitHub Pagesでホスティング後、`https://<username>.github.io/<repo-name>/` でアクセス可能。
 
 ## 使い方
 
@@ -77,40 +73,6 @@ script.js        メインロジック・座席管理・データ永続化
 - 旧データ形式を自動マイグレーション（7列→8列、ブール値→オブジェクト形式）
 - レスポンシブ対応：教室PC・タブレットでも崩れない
 - 印刷専用CSSとプレビュー用CSSを分離
-
-## デプロイ手順（GitHub Pages）
-
-職場のファイルサーバーにJSが上げられない場合、GitHub Pagesでホスティングするのが最も簡単。
-
-```bash
-# 1. リポジトリ作成後、ローカルにクローン
-git clone https://github.com/<username>/<repo-name>.git
-cd <repo-name>
-
-# 2. ファイルをコピーしてpush
-cp -r /path/to/seat-app/* .
-git add .
-git commit -m "Initial commit"
-git push origin main
-```
-
-その後GitHubのリポジトリページで:
-
-1. **Settings** → **Pages**
-2. **Source**: `Deploy from a branch`
-3. **Branch**: `main` / `(root)`
-4. **Save** をクリック
-5. 数分待つと `https://<username>.github.io/<repo-name>/` でアクセス可能に
-
-教室PCのブラウザにこのURLをブックマークしておけば、毎回そこからアクセスできます。
-
-### プライベートリポジトリで使いたい場合
-
-GitHub Free アカウントでも、プライベートリポジトリでGitHub Pagesを使うには Pro プラン（$4/月）が必要です。学校で公開したくない場合は：
-
-- **Cloudflare Pages**（無料・プライベートリポジトリOK）
-- **Netlify**（無料枠あり）
-- **ローカル配置**: 教室PCに直接ファイル一式を置いて `index.html` を開くだけでも動作
 
 ## カスタマイズ
 
