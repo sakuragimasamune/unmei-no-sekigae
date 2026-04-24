@@ -719,11 +719,13 @@ body {
     .btn { padding: 8px 14px; font-size: 13px; }
 }
 
-/* 印刷時:画面用UIを完全に隠す(印刷用CSSはprint.js内で詳細指定)
-   ★重要:display: none で完全に空間ごと消す(visibility: hiddenだとスペース残って
-   空白ページが出る) */
+/* 印刷時:画面用UIを隠す。display: noneではなくvisibility: hiddenを使う
+   (display: noneだと入れ子で間違って印刷本体まで消すリスクがある)
+   空白の追加ページはprint.js側のposition:fixed+page-break制御で対処 */
 @media print {
     body > *:not(#print-preview-modal) {
-        display: none !important;
+        visibility: hidden !important;
+        position: absolute !important;
+        left: -9999px !important;
     }
 }
