@@ -720,12 +720,10 @@ body {
 }
 
 /* 印刷時:画面用UIを完全に隠す(印刷用CSSはprint.js内で詳細指定)
-   ★重要:印刷プレビューモーダルだけは除外 — これが消えると印刷真っ白になる */
+   ★重要:display: none で完全に空間ごと消す(visibility: hiddenだとスペース残って
+   空白ページが出る) */
 @media print {
-    #button-container,
-    #setting-mode-alert,
-    .subbuttons-container,
-    .modal:not(#print-preview-modal) {
+    body > *:not(#print-preview-modal) {
         display: none !important;
     }
 }

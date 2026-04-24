@@ -128,11 +128,12 @@ document.addEventListener('DOMContentLoaded', () => {
             width: 257mm;  /* B5横向きの実サイズ */
             height: 182mm;
             background-color: white;
-            /* ★v2.2:上下の余白をぐっと詰めて1枚に収める */
-            padding: 6mm 8mm 6mm 8mm;
+            /* ★v2.6:padding最小化(印刷時の@page marginに任せる)
+               プレビューと印刷で同じ見た目になるよう揃える */
+            padding: 2mm;
             box-sizing: border-box;
             transform: scale(0.5);
-            transform-origin: top left;  /* center → leftに変更:wrapperと位置を揃える */
+            transform-origin: top left;
         }
 
         .print-classroom {
@@ -180,8 +181,8 @@ document.addEventListener('DOMContentLoaded', () => {
             display: grid;
             grid-gap: 4px;
             width: 100%;
-            /* 行の高さを auto にして、コンテンツ(座席)に追従 */
-            grid-auto-rows: minmax(60px, 1fr);
+            /* ★v2.6:minmax下限を60→68pxに(名前フォントが大きくなる分確保) */
+            grid-auto-rows: minmax(68px, 1fr);
             flex: 1;  /* 残りの縦スペース全部使う */
         }
 
@@ -279,52 +280,72 @@ document.addEventListener('DOMContentLoaded', () => {
         .print-seating-grid.font-small .print-seat-name { font-size: 14px; }
         
         @media print {
-            body * {
-                visibility: hidden;
-            }
-            #print-area-wrapper, #print-area-wrapper * {
-                visibility: visible;
-            }
-
-            /* ★印刷プレビューモーダルの装飾を剥がす
-               (モーダルの半透明黒背景、白パネル、設定UIなど全部消す) */
+            /* ★v2.6:visibility方式をやめてdisplay方式に
+               visibility: hiddenはスペースを残すので空白の1ページ目が出る */
             #print-preview-modal {
                 display: block !important;
                 position: static !important;
                 background: transparent !important;
                 overflow: visible !important;
+                padding: 0 !important;
+                margin: 0 !important;
+                inset: auto !important;
             }
             #print-preview-modal .modal-content {
                 background: transparent !important;
                 box-shadow: none !important;
                 padding: 0 !important;
+                margin: 0 !important;
                 max-width: none !important;
                 max-height: none !important;
                 width: auto !important;
                 overflow: visible !important;
                 border-radius: 0 !important;
             }
-
-            /* ★Phase 2修正:印刷時はwrapperを解除して全画面に */
+            /* プレビューUI(説明文・設定パネル・プレビュー枠・ボタン)を非表示 */
+            #print-preview-modal h2,
+            .print-instructions,
+            #print-settings,
+            #print-preview-container,
+            .modal-buttons {
+                display: none !important;
+            }
+            /* プレビュー時のwrapper装飾を解除 */
             #print-area-wrapper {
-                width: auto;
-                height: auto;
-                overflow: visible;
-                box-shadow: none;
-                position: absolute;
-                left: 0;
-                top: 0;
-                background: none;
+                display: block !important;
+                width: auto !important;
+                height: auto !important;
+                overflow: visible !important;
+                box-shadow: none !important;
+                position: static !important;
+                background: none !important;
+                margin: 0 !important;
+                padding: 0 !important;
             }
             #print-area {
-                width: 100%;
-                height: auto;
-                padding: 6mm 8mm 6mm 8mm;
-                transform: none;
+                width: 100% !important;
+                height: auto !important;
+                /* ★v2.6:paddingを極小化。プリンタの物理マージンに任せる */
+                padding: 2mm !important;
+                margin: 0 !important;
+                transform: none !important;
+                box-sizing: border-box !important;
+                background: white !important;
+            }
+            body, html {
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white !important;
+            }
+            .print-seat {
+                aspect-ratio: auto;
             }
             @page {
+                /* ★v2.6:margin 0にするとブラウザが縮小モードに入ってプレビューより
+                   小さく印刷される。3mmにすると原寸大で印刷できる
+                   (多くのプリンタの物理余白は4-5mm未満) */
                 size: B5 landscape;
-                margin: 0;
+                margin: 3mm;
             }
         }
     `;
@@ -538,9 +559,12 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     /**
-     * ★v2.2:最適フォントサイズの動的計算
+     * ★v2.2〜v2.6:最適フォントサイズの動的計算
      * 各セルの実幅と名前文字数から、その名前が「1行に収まる最大サイズ」を逆算する。
      * これによって5文字でも6文字でも、列幅の許す限りでは1行に表示される。
+     *
+     * v2.6:全体的に上限を引き上げ(印刷エリアが広がったので余裕ができた)、
+     *      ルビは名前サイズに引きずられないよう独立計算に変更。
      */
     function calculateOptimalFontSize() {
         const printSeatingGrid = document.getElementById('print-seating-grid');
@@ -552,18 +576,28 @@ document.addEventListener('DOMContentLoaded', () => {
         const columnCount = gridStyle.getPropertyValue('grid-template-columns').split(' ').length;
 
         // 列数別の上限・下限フォントサイズ(プレビュー時の見た目基準)
-        // ※ #print-area は scale(0.5) なので、ここのpx値はB5上の実サイズ基準
+        // ★v2.6:全体的に引き上げ。paddingが小さくなった分セル幅が広がる
         const sizeBounds = {
-            4:  { max: 32, min: 18 },
-            5:  { max: 28, min: 16 },
-            6:  { max: 24, min: 14 },
-            7:  { max: 20, min: 12 },
-            8:  { max: 18, min: 10 }
+            4:  { max: 36, min: 22 },
+            5:  { max: 32, min: 20 },
+            6:  { max: 28, min: 18 },
+            7:  { max: 24, min: 16 },
+            8:  { max: 22, min: 13 }
         };
-        const bounds = sizeBounds[columnCount] || { max: 18, min: 10 };
+        const bounds = sizeBounds[columnCount] || { max: 22, min: 13 };
 
-        // 日本語1文字あたりの幅係数(font-sizeに対する文字幅の比率)
-        // 全角文字は概ね font-size と同じ幅を取るので 1.0 だが、padding等も考えて 1.05 で余裕を見る
+        // ★v2.6:ルビ(フリガナ)の列数別独立サイズ
+        // 名前の大小に関わらずルビは常に「読める最小限」を保つ
+        const furiganaBounds = {
+            4:  { max: 16, min: 13 },
+            5:  { max: 15, min: 12 },
+            6:  { max: 14, min: 11 },
+            7:  { max: 13, min: 10 },
+            8:  { max: 12, min: 10 }
+        };
+        const furBounds = furiganaBounds[columnCount] || { max: 12, min: 10 };
+
+        // 日本語1文字あたりの幅係数
         const CHAR_WIDTH_RATIO = 1.05;
 
         seats.forEach(seat => {
@@ -574,29 +608,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const nameLength = nameText.length;
             if (nameLength === 0) return;
 
-            // セル本体の幅(プレビュー上の実測px)から、内側のpadding(2*3=6px)を引いた利用可能幅
             const cellWidth = seat.clientWidth - 6;
             if (cellWidth <= 0) return;
 
-            // 「nameLength文字」がcellWidthに収まる最大font-sizeを逆算
-            // cellWidth = nameLength * fontSize * CHAR_WIDTH_RATIO
-            // → fontSize = cellWidth / (nameLength * CHAR_WIDTH_RATIO)
+            // 名前:1行に収まる最大サイズをcellWidthから逆算
             let optimalSize = Math.floor(cellWidth / (nameLength * CHAR_WIDTH_RATIO));
-
-            // 上限・下限でクランプ
             optimalSize = Math.min(bounds.max, Math.max(bounds.min, optimalSize));
-
             nameElement.style.setProperty('font-size', `${optimalSize}px`, 'important');
 
-            // ふりがなは名前のさらに半分くらいで(最低8px)
+            // ルビも同様に、セル幅から収まるサイズを逆算(ただし独立の上下限で)
             const furiganaElement = seat.querySelector('.print-seat-furigana');
             if (furiganaElement) {
-                const furiganaSize = Math.max(8, Math.floor(optimalSize * 0.55));
-                furiganaElement.style.setProperty('font-size', `${furiganaSize}px`, 'important');
+                const furiganaText = furiganaElement.textContent;
+                const furiganaLength = furiganaText.length;
+                if (furiganaLength > 0) {
+                    // 半角カナは全角の約半分の幅なので係数0.6
+                    const furSize = Math.floor(cellWidth / (furiganaLength * 0.6));
+                    const clampedFurSize = Math.min(furBounds.max, Math.max(furBounds.min, furSize));
+                    furiganaElement.style.setProperty('font-size', `${clampedFurSize}px`, 'important');
+                }
             }
         });
 
-        console.log('動的フォント計算完了:', { columnCount, bounds });
+        console.log('動的フォント計算完了:', { columnCount, bounds, furBounds });
     }
     
     // 使用中の座席の範囲を取得する関数
