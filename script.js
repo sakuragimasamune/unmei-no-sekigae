@@ -169,8 +169,22 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('roster-save').addEventListener('click', () => {
         const rosterInput = document.getElementById('roster-input');
         seatingData.roster = processRoster(rosterInput.value);
+        applyPinnedSeats();   // 名簿から消えた生徒の指定席は自動解除
         saveToLocalStorage();
+        initializeSeats();
         rosterModal.style.display = 'none';
+    });
+
+    // ─── 指定席設定モーダル ──────────────────────────────────
+    document.getElementById('pinned-seat-btn').addEventListener('click', openPinnedModal);
+    document.getElementById('pinned-add').addEventListener('click', () => addPinnedRow());
+    document.getElementById('pinned-cancel').addEventListener('click', () => {
+        document.getElementById('pinned-modal').style.display = 'none';
+    });
+    document.getElementById('pinned-save').addEventListener('click', () => {
+        if (savePinnedModal()) {
+            document.getElementById('pinned-modal').style.display = 'none';
+        }
     });
 
     // ─── 特殊演出設定モーダル ────────────────────────────────
@@ -397,6 +411,7 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('clear-btn').addEventListener('click', () => {
         if (window.confirm('座席の割り当てをすべてクリアしますか?')) {
             seatingData.assignments = createEmptyAssignments();
+            applyPinnedSeats();   // 指定席は残す
             saveToLocalStorage();
             initializeSeats();
         }
@@ -528,6 +543,22 @@ function toggleSeat(seat) {
     const seatData = seatingData.seats[row][col];
     const seatNumber = `${String.fromCharCode(65 + col)}${row + 1}`;
 
+    // 指定席の扱い
+    if (seatData.properties.pinned) {
+        if (currentMode === MODE.SEAT) {
+            if (!confirm(`${seatNumber}は${seatData.properties.pinned}さんの指定席です。使用不可にすると指定も解除されます。よろしいですか?`)) return;
+            unpinSeat(row, col);
+        } else {
+            const pinned = seatingData.roster.find(s => s.name === seatData.properties.pinned);
+            const newGender = currentMode === MODE.GENDER_MALE ? 'male'
+                            : currentMode === MODE.GENDER_FEMALE ? 'female' : null;
+            if (!isGenderMatch(newGender, pinned?.gender)) {
+                alert(`${seatNumber}は${pinned?.name}さんの指定席のため、この性別指定はできません。`);
+                return;
+            }
+        }
+    }
+
     switch (currentMode) {
         case MODE.SEAT:          seatData.enabled = !seatData.enabled; break;
         case MODE.GENDER_CLEAR:  seatData.properties.gender = null;    break;
@@ -536,6 +567,7 @@ function toggleSeat(seat) {
     }
     updateSeatAppearance(seat, seatNumber, seatData);
     saveToLocalStorage();
+    if (currentMode === MODE.SEAT) initializeSeats();
 }
 
 // ─── 座席表示の更新(重複ロジックを統合) ─────────────────────
@@ -560,6 +592,7 @@ function updateSeatAppearance(seat, seatNumber, seatData) {
     if (assignment) {
         seat.textContent = assignment.name;
         seat.classList.add('assigned');
+        if (seatData.properties.pinned === assignment.name) seat.classList.add('pinned');
         const bgColor = getSeatColor(assignment);
         seat.style.backgroundColor = bgColor;
         seat.style.color = getTextColor(bgColor);
@@ -691,24 +724,178 @@ function startSlot() {
         return;
     }
     const selectedStudent = availableStudents[Math.floor(Math.random() * availableStudents.length)];
-    const availableColumns = getAvailableColumnsForStudent(selectedStudent);
 
-    if (availableColumns.length === 0) {
+    // ★v2.6:座る席はソルバーが決める(条件を満たし、最後まで配置可能な席のみ)
+    const candidates = window.SeatSolver.candidateSeatsFor(selectedStudent);
+    if (candidates.length === 0) {
         alert(`${selectedStudent.name}さんが座れる席がありません!`);
         return;
     }
 
+    // 従来と同じ「列を等確率 → その列の行を等確率」で選ぶ
+    const candidateCols = [...new Set(candidates.map(s => s.col))];
+    const pickedCol = candidateCols[Math.floor(Math.random() * candidateCols.length)];
+    const rowsInCol = candidates.filter(s => s.col === pickedCol);
+    const pickedSeat = rowsInCol[Math.floor(Math.random() * rowsInCol.length)];
+    const fixedSeat = {
+        col: String.fromCharCode(65 + pickedSeat.col),
+        row: String(pickedSeat.row + 1)
+    };
+
+    // リールに流す候補は従来どおり(性別で座れる列・行すべて)
+    const availableColumns = getAvailableColumnsForStudent(selectedStudent);
+
     // ★v2.4:名前スロットも回転させる
-    //   - 視覚用に全員の名前を渡す(回転して見える)
-    //   - 性別整合性チェックで決まった selectedStudent.name で必ず停止
     const allNames = availableStudents.map(s => s.name);
 
     window.slotMachine.start(
         allNames,
         availableColumns,
         () => (colLetter) => getAvailableRows(colLetter, selectedStudent),
-        selectedStudent.name  // ★第4引数:確定する名前
+        selectedStudent.name,  // 第4引数:確定する名前
+        fixedSeat              // 第5引数:確定する席
     );
+}
+
+// ============================================================
+// 指定席
+// ============================================================
+function seatLabel(row, col) {
+    return `${String.fromCharCode(65 + col)}${row + 1}`;
+}
+
+/** 指定席の生徒をその席に配置する(既にいる別の生徒は未配置に戻る) */
+function applyPinnedSeats() {
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const seat = seatingData.seats[r][c];
+            const pin = seat.properties.pinned;
+            if (!pin) continue;
+            const student = seatingData.roster.find(s => s.name === pin);
+            if (!seat.enabled || !student) {
+                delete seat.properties.pinned;
+                continue;
+            }
+            if (seatingData.assignments[r][c]?.name !== pin) {
+                removeStudentFromCurrentSeat(pin);
+                seatingData.assignments[r][c] = student;
+            }
+        }
+    }
+}
+
+/** 指定席の生徒を未配置に戻し、指定を外す */
+function unpinSeat(row, col) {
+    const seat = seatingData.seats[row][col];
+    const pin = seat.properties.pinned;
+    if (!pin) return;
+    if (seatingData.assignments[row][col]?.name === pin) {
+        seatingData.assignments[row][col] = null;
+    }
+    delete seat.properties.pinned;
+}
+
+function openPinnedModal() {
+    const modal = document.getElementById('pinned-modal');
+    const list = document.getElementById('pinned-list');
+    list.innerHTML = '';
+    if (seatingData.roster.length === 0) {
+        list.innerHTML = '<p>先に名簿を設定してください。</p>';
+    }
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const pin = seatingData.seats[r][c].properties.pinned;
+            if (pin) addPinnedRow(pin, `${r},${c}`);
+        }
+    }
+    modal.style.display = 'flex';
+}
+
+function addPinnedRow(name = '', seatKey = '') {
+    const list = document.getElementById('pinned-list');
+    const row = document.createElement('div');
+    row.className = 'pinned-row';
+
+    const nameSel = document.createElement('select');
+    nameSel.className = 'pinned-name';
+    nameSel.innerHTML = '<option value="">-- 生徒 --</option>';
+    seatingData.roster.forEach(s => {
+        const opt = document.createElement('option');
+        opt.value = s.name;
+        opt.textContent = s.number ? `${s.number} ${s.name}` : s.name;
+        nameSel.appendChild(opt);
+    });
+    nameSel.value = name;
+
+    const seatSel = document.createElement('select');
+    seatSel.className = 'pinned-seat';
+    seatSel.innerHTML = '<option value="">-- 席 --</option>';
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const seat = seatingData.seats[r][c];
+            if (!seat.enabled) continue;
+            const g = seat.properties.gender;
+            const opt = document.createElement('option');
+            opt.value = `${r},${c}`;
+            opt.textContent = seatLabel(r, c) + (g === 'male' ? '(男子席)' : g === 'female' ? '(女子席)' : '');
+            seatSel.appendChild(opt);
+        }
+    }
+    seatSel.value = seatKey;
+
+    const del = document.createElement('button');
+    del.className = 'btn pinned-del';
+    del.textContent = '削除';
+    del.addEventListener('click', () => row.remove());
+
+    row.append(nameSel, seatSel, del);
+    list.appendChild(row);
+}
+
+function savePinnedModal() {
+    const rows = [...document.querySelectorAll('#pinned-list .pinned-row')];
+    const entries = rows.map(r => ({
+        name: r.querySelector('.pinned-name').value,
+        seatKey: r.querySelector('.pinned-seat').value
+    })).filter(e => e.name && e.seatKey);
+
+    // 入力チェック
+    const names = entries.map(e => e.name);
+    const keys = entries.map(e => e.seatKey);
+    if (new Set(names).size !== names.length) {
+        alert('同じ生徒が複数の席に指定されています。');
+        return false;
+    }
+    if (new Set(keys).size !== keys.length) {
+        alert('同じ席に複数の生徒が指定されています。');
+        return false;
+    }
+    for (const e of entries) {
+        const [r, c] = e.seatKey.split(',').map(Number);
+        const student = seatingData.roster.find(s => s.name === e.name);
+        if (!isGenderMatch(seatingData.seats[r][c].properties.gender, student?.gender)) {
+            alert(`${e.name}さんは${seatLabel(r, c)}の性別指定と合いません。`);
+            return false;
+        }
+    }
+
+    // 外された指定席の生徒は未配置に戻す
+    for (let r = 0; r < ROWS; r++) {
+        for (let c = 0; c < COLS; c++) {
+            const pin = seatingData.seats[r][c].properties.pinned;
+            if (pin && !entries.some(e => e.name === pin && e.seatKey === `${r},${c}`)) {
+                unpinSeat(r, c);
+            }
+        }
+    }
+    entries.forEach(e => {
+        const [r, c] = e.seatKey.split(',').map(Number);
+        seatingData.seats[r][c].properties.pinned = e.name;
+    });
+    applyPinnedSeats();
+    saveToLocalStorage();
+    initializeSeats();
+    return true;
 }
 
 // ============================================================
@@ -835,6 +1022,7 @@ function checkAdjacentSeat(row, col, partner) {
     if (row < 0 || row >= ROWS) return null;
     const seat = seatingData.seats[row][col];
     if (!seat || !seat.enabled) return null;
+    if (seat.properties.pinned) return null;   // 指定席は再会の対象にしない
 
     const seatGender = seat.properties.gender;
     const partnerGender = partner?.gender;
@@ -853,31 +1041,26 @@ async function executeReunionEvent(newStudent, selectedPair, newSeat) {
     const partner = seatingData.roster.find(s => s.name === partnerName);
     if (!partner) return false;
 
+    // ★v2.6:候補を優先順に並べ、配置条件を満たす最初の席を使う
+    //   優先順:右の空席 → 左の空席 → 右を上書き → 左を上書き(従来と同じ優先順位)
+    const right = checkAdjacentSeat(newSeat.row, newSeat.col + 1, partner);
+    const left  = checkAdjacentSeat(newSeat.row, newSeat.col - 1, partner);
+    const options = [];
+    if (right && !right.student) options.push({ seat: right, direction: 'right' });
+    if (left  && !left.student)  options.push({ seat: left,  direction: 'left' });
+    if (right &&  right.student) options.push({ seat: right, direction: 'right' });
+    if (left  &&  left.student)  options.push({ seat: left,  direction: 'left' });
+
+    const chosen = options.find(o =>
+        window.SeatSolver.reunionAllowed(partner, { row: o.seat.row, col: o.seat.col }, o.seat.student)
+    );
     let targetSeat = null;
     let overriddenStudent = null;
     let direction = 'right';
-
-    const rightSeat = checkAdjacentSeat(newSeat.row, newSeat.col + 1, partner);
-    if (rightSeat) {
-        if (!rightSeat.student) {
-            targetSeat = { row: newSeat.row, col: newSeat.col + 1 };
-        } else {
-            targetSeat = { row: newSeat.row, col: newSeat.col + 1 };
-            overriddenStudent = rightSeat.student;
-            const leftSeat = checkAdjacentSeat(newSeat.row, newSeat.col - 1, partner);
-            if (leftSeat && !leftSeat.student) {
-                targetSeat = { row: newSeat.row, col: newSeat.col - 1 };
-                overriddenStudent = null;
-                direction = 'left';
-            }
-        }
-    } else {
-        const leftSeat = checkAdjacentSeat(newSeat.row, newSeat.col - 1, partner);
-        if (leftSeat) {
-            targetSeat = { row: newSeat.row, col: newSeat.col - 1 };
-            direction = 'left';
-            if (leftSeat.student) overriddenStudent = leftSeat.student;
-        }
+    if (chosen) {
+        targetSeat = { row: chosen.seat.row, col: chosen.seat.col };
+        overriddenStudent = chosen.seat.student || null;
+        direction = chosen.direction;
     }
     if (!targetSeat) return false;
 
@@ -1022,6 +1205,7 @@ function handleCompletion() {
         exportConfiguration();
         // ★ Phase 1 バグ修正:7×7→ROWS×COLS
         seatingData.assignments = createEmptyAssignments();
+        applyPinnedSeats();   // 指定席は残す
         saveToLocalStorage();
         initializeSeats();
         modal.style.display = 'none';
@@ -1061,6 +1245,12 @@ function initializeDragDrop() {
             const toCol = parseInt(seat.dataset.col);
             if (fromRow === toRow && fromCol === toCol) return;
 
+            // ★v2.6:指定席は動かさない
+            if (window.SeatSolver.isPinned(fromRow, fromCol) || window.SeatSolver.isPinned(toRow, toCol)) {
+                alert('指定席の生徒は移動できません。「指定席設定」から変更してください。');
+                return;
+            }
+
             // ★ Phase 1 改善:性別制限のチェック
             const fromStudent = seatingData.assignments[fromRow][fromCol];
             const toStudent = seatingData.assignments[toRow][toCol];
@@ -1071,6 +1261,10 @@ function initializeDragDrop() {
                 !isGenderMatch(fromSeatGender, toStudent?.gender)) {
                 alert('性別指定された席があるため、この交換はできません。');
                 return;
+            }
+
+            if (!window.SeatSolver.swapAllowed(fromRow, fromCol, toRow, toCol)) {
+                if (!confirm('この入れ替えは登録済みの配置条件に合いません。それでも移動しますか?')) return;
             }
 
             const temp = seatingData.assignments[fromRow][fromCol];
@@ -1193,7 +1387,8 @@ function exportConfiguration() {
                 shuffle:   localStorage.getItem('shuffleEventProbability')
             },
             fortuneType: localStorage.getItem('fortuneType'),
-            customFortune: localStorage.getItem('customFortune')
+            customFortune: localStorage.getItem('customFortune'),
+            ...(window.SeatSolver.shouldExport() ? { uiCache: window.SeatSolver.exportBlob() } : {})
         },
         history: JSON.parse(localStorage.getItem('seatingConfig') || '{"history":{"pairs":[]}}').history
     };
@@ -1236,6 +1431,9 @@ function importConfiguration(file) {
                 if (config.settings.fortuneType === 'custom') {
                     currentFortuneSet = JSON.parse(config.settings.customFortune);
                 }
+            }
+            if (config.settings.uiCache) {
+                window.SeatSolver.importBlob(config.settings.uiCache);
             }
             if (config.history) {
                 localStorage.setItem('seatingConfig', JSON.stringify({ history: config.history }));

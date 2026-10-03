@@ -298,7 +298,8 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // メッセージ一覧を編集モードで表示するボタン
-    document.getElementById('edit-messages').addEventListener('click', () => {
+    // ★v2.6:HTMLにこのボタンが無いとここで例外になり、以降(保存・起動時の読み込み)が動かなかった
+    document.getElementById('edit-messages')?.addEventListener('click', () => {
         showMessageEditor();
     });
 

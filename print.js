@@ -32,12 +32,8 @@ document.addEventListener('DOMContentLoaded', () => {
                     </label>
                 </div>
                 <div class="print-setting-group">
-                    <label>見出しタイトル(教卓の上・空欄で非表示):</label>
-                    <input type="text" id="print-heading" value="" placeholder="例: 1年A組 座席表">
-                </div>
-                <div class="print-setting-group">
-                    <label>教卓に表示する文字:</label>
-                    <input type="text" id="print-title" value="教卓" placeholder="例: 教卓">
+                    <label>印刷タイトル(教卓内に表示):</label>
+                    <input type="text" id="print-title" value="教卓" placeholder="例: 1年A組 教卓">
                 </div>
                 <div class="print-setting-group">
                     <label>文字サイズ調整:</label>
@@ -132,43 +128,29 @@ document.addEventListener('DOMContentLoaded', () => {
             width: 257mm;  /* B5横向きの実サイズ */
             height: 182mm;
             background-color: white;
-            /* ★v2.6:padding最小化(印刷時の@page marginに任せる)
-               プレビューと印刷で同じ見た目になるよう揃える */
-            padding: 2mm;
+            /* ★v2.2:上下の余白をぐっと詰めて1枚に収める */
+            padding: 6mm 8mm 6mm 8mm;
             box-sizing: border-box;
             transform: scale(0.5);
-            transform-origin: top left;
+            transform-origin: top left;  /* center → leftに変更:wrapperと位置を揃える */
         }
 
         .print-classroom {
             display: flex;
             flex-direction: column;
             align-items: stretch;
-            /* ★v2.8:縦方向も中央揃え。教卓+座席のかたまりをページ中央に置く */
-            justify-content: center;
             width: 100%;
             height: 100%;
         }
 
-        /* ★v2.11:見出しタイトル(○年○組 座席表 など) */
-        .print-heading {
-            text-align: center;
-            font-size: 20px;
-            font-weight: bold;
-            color: #2c3e50;
-            margin: 0 auto 8px auto;
-            letter-spacing: 0.05em;
-        }
-
         /* ★v2.3:教卓ブロック - 3カラムグリッドで教卓を常に中央固定
-           [1fr 左余白] [教卓 auto] [1fr 右余白(日付配置)]
-           ★v2.12:上下両方にマージン。教員視点でも座席との間隔を確保 */
+           [1fr 左余白] [教卓 auto] [1fr 右余白(日付配置)] */
         .print-teacher-row {
             display: grid;
             grid-template-columns: 1fr auto 1fr;
             align-items: center;
             width: 100%;
-            margin: 8px auto;
+            margin: 0 auto 8px auto;
         }
         .print-teacher-desk {
             grid-column: 2;  /* 真ん中の列 */
@@ -198,9 +180,9 @@ document.addEventListener('DOMContentLoaded', () => {
             display: grid;
             grid-gap: 4px;
             width: 100%;
-            /* ★v2.8:1fr→auto。行の高さは内容ベース、余白はflexの中央揃えで配分 */
-            grid-auto-rows: minmax(68px, auto);
-            flex: 0 1 auto;  /* 伸縮しない(自然な高さでいる) */
+            /* 行の高さを auto にして、コンテンツ(座席)に追従 */
+            grid-auto-rows: minmax(60px, 1fr);
+            flex: 1;  /* 残りの縦スペース全部使う */
         }
 
         /* 教員視点のグリッド回転 */
@@ -264,11 +246,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
         .print-seat-furigana {
             font-size: 0.5em;
-            /* ★v2.9:親要素(.print-seat)の文字色を継承 + opacity 0.75で馴染ませる
-               座席の背景色に応じてgetTextColorで自動生成された色を使うので
-               緑の座席・黄色の座席など、どの色でも自然に馴染む */
-            color: inherit;
-            opacity: 0.75;
+            color: #666;
             line-height: 1;
             margin-bottom: 1px;
             white-space: nowrap;
@@ -301,99 +279,52 @@ document.addEventListener('DOMContentLoaded', () => {
         .print-seating-grid.font-small .print-seat-name { font-size: 14px; }
         
         @media print {
-            /* ★v2.7:v2.5の動く方式(visibility)に戻す + 空白追加ページ対策 */
+            body * {
+                visibility: hidden;
+            }
+            #print-area-wrapper, #print-area-wrapper * {
+                visibility: visible;
+            }
 
-            /* モーダル自体は"表示されてる状態"のまま触らない
-               (触るとflex配置が崩れて本体が消えるリスクがある) */
+            /* ★印刷プレビューモーダルの装飾を剥がす
+               (モーダルの半透明黒背景、白パネル、設定UIなど全部消す) */
             #print-preview-modal {
-                background: transparent !important;
                 display: block !important;
                 position: static !important;
+                background: transparent !important;
                 overflow: visible !important;
-                inset: auto !important;
             }
             #print-preview-modal .modal-content {
                 background: transparent !important;
                 box-shadow: none !important;
                 padding: 0 !important;
-                margin: 0 !important;
                 max-width: none !important;
                 max-height: none !important;
                 width: auto !important;
                 overflow: visible !important;
                 border-radius: 0 !important;
-                display: block !important;
             }
 
-            /* モーダル内の飾りUIは画面外に追い出す(display:noneではなく) */
-            #print-preview-modal h2,
-            .print-instructions,
-            #print-settings,
-            .modal-buttons {
-                visibility: hidden !important;
-                position: absolute !important;
-                left: -9999px !important;
-                height: 0 !important;
-                overflow: hidden !important;
-            }
-
-            /* プレビュー用の背景枠を解除 */
-            #print-preview-container {
-                background: transparent !important;
-                padding: 0 !important;
-                margin: 0 !important;
-                overflow: visible !important;
-                display: block !important;
-                border-radius: 0 !important;
-            }
-
-            /* ★本体:position: fixed で1ページ目の左上に強制配置
-               これで後続に空白要素があっても絶対に2ページ目にズレない */
+            /* ★Phase 2修正:印刷時はwrapperを解除して全画面に */
             #print-area-wrapper {
-                display: block !important;
-                position: fixed !important;
-                top: 0 !important;
-                left: 0 !important;
-                /* ★v2.10:幅は100% (@pageマージン内の領域全体を使う)
-                          高さは明示指定。これで子のheight: 100%が効く */
-                width: 100% !important;
-                height: 176mm !important;
-                overflow: visible !important;
-                box-shadow: none !important;
-                background: white !important;
-                margin: 0 !important;
-                padding: 0 !important;
-                page-break-after: avoid !important;
-                page-break-inside: avoid !important;
-                break-after: avoid !important;
-                break-inside: avoid !important;
+                width: auto;
+                height: auto;
+                overflow: visible;
+                box-shadow: none;
+                position: absolute;
+                left: 0;
+                top: 0;
+                background: none;
             }
             #print-area {
-                width: 100% !important;
-                height: 100% !important;
-                padding: 2mm !important;
-                margin: 0 !important;
-                transform: none !important;
-                box-sizing: border-box !important;
-                background: white !important;
-                page-break-after: avoid !important;
-                break-after: avoid !important;
+                width: 100%;
+                height: auto;
+                padding: 6mm 8mm 6mm 8mm;
+                transform: none;
             }
-
-            body, html {
-                margin: 0 !important;
-                padding: 0 !important;
-                background: white !important;
-                height: auto !important;
-            }
-
-            .print-seat {
-                aspect-ratio: auto;
-            }
-
             @page {
                 size: B5 landscape;
-                margin: 3mm;
+                margin: 0;
             }
         }
     `;
@@ -427,10 +358,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const deskEl = document.querySelector('.print-teacher-desk');
         if (deskEl) deskEl.textContent = e.target.value || '教卓';
     });
-    // ★v2.11:見出しのライブ更新
-    document.getElementById('print-heading').addEventListener('input', () => {
-        generatePrintPreview();
-    });
     document.getElementById('font-size-option').addEventListener('change', () => {
         updateFontSizeClass();
         if (document.getElementById('font-size-option').value === 'auto') {
@@ -445,21 +372,12 @@ document.addEventListener('DOMContentLoaded', () => {
         return teacherViewBtn && teacherViewBtn.classList.contains('active');
     }
     
-    // 印刷プレビューを生成する関数 ★v2.2:大幅改訂 ★v2.11:見出し追加
+    // 印刷プレビューを生成する関数 ★v2.2:大幅改訂
     function generatePrintPreview() {
         const printClassroom = document.getElementById('print-classroom');
         printClassroom.innerHTML = '';
 
         const currentIsTeacherView = isCurrentlyTeacherView();
-
-        // ─── 見出し(○年○組 座席表など:空欄時は非表示) ──
-        const headingText = document.getElementById('print-heading').value.trim();
-        let headingEl = null;
-        if (headingText) {
-            headingEl = document.createElement('div');
-            headingEl.className = 'print-heading';
-            headingEl.textContent = headingText;
-        }
 
         // ─── 教卓ブロック(教卓+日付横並び) ──────────
         const teacherRow = document.createElement('div');
@@ -489,15 +407,11 @@ document.addEventListener('DOMContentLoaded', () => {
             printSeatingGrid.classList.add('teacher-view');
         }
 
-        // ─── 構造構築 ──────────────────────────────
-        // 通常視点: 見出し → 教卓 → 座席
-        // 教員視点: 座席 → 教卓 → 見出し (見出しも教卓側=教員側に置く)
+        // ─── 構造構築:教卓→座席 / 教員視点なら座席→教卓 ─
         if (currentIsTeacherView) {
             printClassroom.appendChild(printSeatingGrid);
             printClassroom.appendChild(teacherRow);
-            if (headingEl) printClassroom.appendChild(headingEl);
         } else {
-            if (headingEl) printClassroom.appendChild(headingEl);
             printClassroom.appendChild(teacherRow);
             printClassroom.appendChild(printSeatingGrid);
         }
@@ -624,12 +538,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     
     /**
-     * ★v2.2〜v2.6:最適フォントサイズの動的計算
+     * ★v2.2:最適フォントサイズの動的計算
      * 各セルの実幅と名前文字数から、その名前が「1行に収まる最大サイズ」を逆算する。
      * これによって5文字でも6文字でも、列幅の許す限りでは1行に表示される。
-     *
-     * v2.6:全体的に上限を引き上げ(印刷エリアが広がったので余裕ができた)、
-     *      ルビは名前サイズに引きずられないよう独立計算に変更。
      */
     function calculateOptimalFontSize() {
         const printSeatingGrid = document.getElementById('print-seating-grid');
@@ -641,28 +552,18 @@ document.addEventListener('DOMContentLoaded', () => {
         const columnCount = gridStyle.getPropertyValue('grid-template-columns').split(' ').length;
 
         // 列数別の上限・下限フォントサイズ(プレビュー時の見た目基準)
-        // ★v2.6:全体的に引き上げ。paddingが小さくなった分セル幅が広がる
+        // ※ #print-area は scale(0.5) なので、ここのpx値はB5上の実サイズ基準
         const sizeBounds = {
-            4:  { max: 36, min: 22 },
-            5:  { max: 32, min: 20 },
-            6:  { max: 28, min: 18 },
-            7:  { max: 24, min: 16 },
-            8:  { max: 22, min: 13 }
+            4:  { max: 32, min: 18 },
+            5:  { max: 28, min: 16 },
+            6:  { max: 24, min: 14 },
+            7:  { max: 20, min: 12 },
+            8:  { max: 18, min: 10 }
         };
-        const bounds = sizeBounds[columnCount] || { max: 22, min: 13 };
+        const bounds = sizeBounds[columnCount] || { max: 18, min: 10 };
 
-        // ★v2.8:ルビ(フリガナ)の列数別独立サイズを引き上げ
-        // 半角カナは細いのでもっと攻められる
-        const furiganaBounds = {
-            4:  { max: 20, min: 15 },
-            5:  { max: 18, min: 14 },
-            6:  { max: 16, min: 13 },
-            7:  { max: 15, min: 12 },
-            8:  { max: 14, min: 11 }
-        };
-        const furBounds = furiganaBounds[columnCount] || { max: 14, min: 11 };
-
-        // 日本語1文字あたりの幅係数
+        // 日本語1文字あたりの幅係数(font-sizeに対する文字幅の比率)
+        // 全角文字は概ね font-size と同じ幅を取るので 1.0 だが、padding等も考えて 1.05 で余裕を見る
         const CHAR_WIDTH_RATIO = 1.05;
 
         seats.forEach(seat => {
@@ -673,29 +574,29 @@ document.addEventListener('DOMContentLoaded', () => {
             const nameLength = nameText.length;
             if (nameLength === 0) return;
 
+            // セル本体の幅(プレビュー上の実測px)から、内側のpadding(2*3=6px)を引いた利用可能幅
             const cellWidth = seat.clientWidth - 6;
             if (cellWidth <= 0) return;
 
-            // 名前:1行に収まる最大サイズをcellWidthから逆算
+            // 「nameLength文字」がcellWidthに収まる最大font-sizeを逆算
+            // cellWidth = nameLength * fontSize * CHAR_WIDTH_RATIO
+            // → fontSize = cellWidth / (nameLength * CHAR_WIDTH_RATIO)
             let optimalSize = Math.floor(cellWidth / (nameLength * CHAR_WIDTH_RATIO));
+
+            // 上限・下限でクランプ
             optimalSize = Math.min(bounds.max, Math.max(bounds.min, optimalSize));
+
             nameElement.style.setProperty('font-size', `${optimalSize}px`, 'important');
 
-            // ルビも同様に、セル幅から収まるサイズを逆算(ただし独立の上下限で)
+            // ふりがなは名前のさらに半分くらいで(最低8px)
             const furiganaElement = seat.querySelector('.print-seat-furigana');
             if (furiganaElement) {
-                const furiganaText = furiganaElement.textContent;
-                const furiganaLength = furiganaText.length;
-                if (furiganaLength > 0) {
-                    // 半角カナは全角の約半分の幅なので係数0.6
-                    const furSize = Math.floor(cellWidth / (furiganaLength * 0.6));
-                    const clampedFurSize = Math.min(furBounds.max, Math.max(furBounds.min, furSize));
-                    furiganaElement.style.setProperty('font-size', `${clampedFurSize}px`, 'important');
-                }
+                const furiganaSize = Math.max(8, Math.floor(optimalSize * 0.55));
+                furiganaElement.style.setProperty('font-size', `${furiganaSize}px`, 'important');
             }
         });
 
-        console.log('動的フォント計算完了:', { columnCount, bounds, furBounds });
+        console.log('動的フォント計算完了:', { columnCount, bounds });
     }
     
     // 使用中の座席の範囲を取得する関数

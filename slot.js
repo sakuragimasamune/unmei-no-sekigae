@@ -407,6 +407,7 @@ class SlotMachine {
            for (let c = 0; c < seatingData.assignments[r].length; c++) {
                const student = seatingData.assignments[r][c];
                if (!student || student.name === name) continue;
+               if (seatingData.seats[r][c]?.properties?.pinned) continue;   // 指定席は対象外
 
                const targetSeatGender = seatingData.seats[r][c]?.properties?.gender;
                
@@ -421,7 +422,12 @@ class SlotMachine {
            }
        }
 
-       if (assignedStudents.length === 0) {
+       // ★v2.6:実際に止まってよい相手(配置条件を満たす相手)
+       const validPartners = assignedStudents.filter(a =>
+           window.SeatSolver.swapAllowed(row, col, a.row, a.col)
+       );
+
+       if (assignedStudents.length === 0 || validPartners.length === 0) {
            this.messageSpace.innerHTML = "しかし、今回は交換できる相手が見つかりませんでした...";
            await new Promise(resolve => setTimeout(resolve, 2000));
            return null;
@@ -469,7 +475,7 @@ class SlotMachine {
                    animationId = requestAnimationFrame(updateSlot);
                } else {
                    cancelAnimationFrame(animationId);
-                   const finalName = names[Math.floor(Math.random() * names.length)];
+                   const finalName = validPartners[Math.floor(Math.random() * validPartners.length)].student.name;
                    content.textContent = finalName;
                    resolve(finalName);
                }
@@ -483,7 +489,7 @@ class SlotMachine {
     }
 
 
-    async start(names, availableColumns, getAvailableRowsCallback, fixedName = null) {
+    async start(names, availableColumns, getAvailableRowsCallback, fixedName = null, fixedSeat = null) {
         if (!this.effectManager) {
             this.effectManager = new SpecialEffectManager();
         }
@@ -498,8 +504,12 @@ class SlotMachine {
             // ★v2.4:isLastStudentで判定(以前は names.length===1 だったが
             //   全員の名前を渡すようになったので残り席数で判定する)
             const lastName = fixedName !== null ? fixedName : names[0];
-            await this.playLastOneChallenge(lastName);
-            return;
+            // ★v2.6:奪える席(性別・配置条件を満たす席)がなければ通常の抽選へ
+            const targets = window.SeatSolver.stealTargets(lastName);
+            if (targets.length > 0) {
+                await this.playLastOneChallenge(lastName, targets);
+                return;
+            }
         }
 
         if (!names.length || !availableColumns.length) {
@@ -517,15 +527,24 @@ class SlotMachine {
         const selectedName = fixedName !== null
             ? fixedName
             : names[Math.floor(Math.random() * names.length)];
-        const selectedCol = availableColumns[Math.floor(Math.random() * availableColumns.length)];
-        const availableRows = getAvailableRowsCallback()(selectedCol);
+        // ★v2.6:fixedSeatがあればその席で止める(リールには通常どおり全候補を流す)
+        let selectedCol, availableRows, selectedRow;
+        if (fixedSeat) {
+            selectedCol = fixedSeat.col;
+            availableRows = getAvailableRowsCallback()(selectedCol);
+            if (!availableRows.includes(fixedSeat.row)) availableRows = availableRows.concat(fixedSeat.row);
+            selectedRow = fixedSeat.row;
+        } else {
+            selectedCol = availableColumns[Math.floor(Math.random() * availableColumns.length)];
+            availableRows = getAvailableRowsCallback()(selectedCol);
+            selectedRow = availableRows[Math.floor(Math.random() * availableRows.length)];
+        }
 
         if (!availableRows.length) {
             alert('選択された列に利用可能な行がありません。もう一度試してください。');
             this.stop();
             return;
         }
-        const selectedRow = availableRows[Math.floor(Math.random() * availableRows.length)];
 
         // 2. 特殊演出の判定
         const effectiveRows = this.effectManager.findEffectiveRows(seatingData.seats);
@@ -539,7 +558,8 @@ class SlotMachine {
 
         // 3. スロット開始
         const nameSlot = this.animateSlot(0, names, 1000, selectedName);
-        const colSlot = this.animateSlot(1, availableColumns, 2000, selectedCol);
+        const colItems = availableColumns.includes(selectedCol) ? availableColumns : availableColumns.concat(selectedCol);
+        const colSlot = this.animateSlot(1, colItems, 2000, selectedCol);
         const rowSlot = this.animateSlot(2, availableRows, 3000, selectedRow);
 
         // 4. 名前のスロットが止まるのを待つ
@@ -823,7 +843,7 @@ class SlotMachine {
     }
 
     // ラストワンチャレンジのメイン処理 ★Phase 3:カウントダウン演出+音響
-    async playLastOneChallenge(lastStudentName) {
+    async playLastOneChallenge(lastStudentName, targets = null) {
         this.show();
         this.container.classList.add('last-one-challenge');
 
@@ -865,8 +885,10 @@ class SlotMachine {
         await new Promise(resolve => setTimeout(resolve, 1500));
 
         // ─── 4. ルーレット開始 ──────────────────────
-        const occupiedSeats = this.getOccupiedSeats();
-        const selectedSeat = await this.rouletteSeatHighlight(occupiedSeats);
+        // 指定席は公開情報なのでルーレットの対象からも外す
+        const occupiedSeats = this.getOccupiedSeats()
+            .filter(s => !seatingData.seats[s.row][s.col].properties.pinned);
+        const selectedSeat = await this.rouletteSeatHighlight(occupiedSeats, targets || occupiedSeats);
 
         // ─── 5. 結果適用と確定音 ─────────────────────
         if (window.soundManager) window.soundManager.rouletteFinal();
@@ -904,7 +926,7 @@ class SlotMachine {
     }
 
     // 座席ルーレットのハイライト（揺らぎあり）
-    async rouletteSeatHighlight(occupiedSeats) {
+    async rouletteSeatHighlight(occupiedSeats, finalCandidates = occupiedSeats) {
         return new Promise(resolve => {
             let currentIndex = 0;
             let speed = 50; // 初期スピード（ミリ秒）
@@ -914,7 +936,9 @@ class SlotMachine {
             
             // ランダムな最終停止位置を事前決定
             const totalCycles = minCycles + Math.floor(Math.random() * 2); // 3〜4周
-            const finalIndex = Math.floor(Math.random() * occupiedSeats.length);
+            const pick = finalCandidates[Math.floor(Math.random() * finalCandidates.length)];
+            let finalIndex = occupiedSeats.findIndex(s => s.row === pick.row && s.col === pick.col);
+            if (finalIndex < 0) finalIndex = 0;
             const totalStops = totalCycles * occupiedSeats.length + finalIndex;
             let stopCount = 0;
 
@@ -1222,41 +1246,11 @@ class ShuffleEvent {
         // 元の配置を保存
         const originalAssignments = JSON.parse(JSON.stringify(seatingData.assignments));
 
-        // 全生徒のリストを作成
-        const allStudents = [];
-        for (let i = 0; i < originalAssignments.length; i++) {
-            for (let j = 0; j < originalAssignments[i].length; j++) {
-                const student = originalAssignments[i][j];
-                if (student) {
-                    allStudents.push(student);
-                }
-            }
-        }
-
-        // 生徒をランダムに並び替え
-        this.shuffle(allStudents);
-
-        // 新しい配置を初期化(★ Phase 3バグ修正:7×7→ROWS×COLS)
-        const newAssignments = Array(ROWS).fill().map(() => Array(COLS).fill(null));
-        const assignedStudents = new Set();
-
-        // 各生徒に対して新しい席を割り当て
-        for (const student of allStudents) {
-            if (assignedStudents.has(student.name)) continue;
-
-            const availableSeats = this.findAvailableSeats(
-                seatingData.seats,
-                student,
-                originalAssignments
-            );
-
-            if (availableSeats.length > 0) {
-                const randomSeatIndex = Math.floor(Math.random() * availableSeats.length);
-                const { row, col } = availableSeats[randomSeatIndex];
-                newAssignments[row][col] = student;
-                assignedStudents.add(student.name);
-            }
-        }
+        // ★v2.6:ソルバーで新しい配置を作る
+        //   - 指定席は動かさない / 元の席には戻さない / 配置条件を満たす
+        //   - まだ決まっていない生徒も最後まで座れる形を保証
+        //   (旧実装では空きのない生徒が盤面から消えることがあった)
+        const newAssignments = window.SeatSolver.buildShuffledGrid() || originalAssignments;
 
         // アニメーション用のクラスを追加 → 席が「ぐいーん」と回転
         document.querySelectorAll('.seat').forEach(seat => {

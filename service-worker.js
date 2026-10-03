@@ -10,7 +10,7 @@
 //          ブラウザが次回起動時に新キャッシュを取得する。
 // ============================================================
 
-const CACHE_VERSION = 'v2.5.0';
+const CACHE_VERSION = 'v2.6.0';
 const CACHE_NAME = `seat-app-${CACHE_VERSION}`;
 
 // オフライン時に必要な全ファイル(プリキャッシュ)
@@ -20,6 +20,7 @@ const ASSETS = [
     './styles.css',
     './sound.js',
     './fortune.js',
+    './placement.js',
     './slot.js',
     './print.js',
     './script.js',

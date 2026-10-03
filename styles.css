@@ -253,6 +253,35 @@ body {
 .seating-grid.teacher-view { transform: rotate(180deg); }
 .seating-grid.teacher-view .seat { transform: rotate(180deg); }
 
+/* ─── 指定席 ─────────────────────────────────────────── */
+.seat.pinned {
+    position: relative;
+    border: 2px dashed rgba(0, 0, 0, 0.35);
+}
+.seat.pinned::after {
+    content: '📌';
+    position: absolute;
+    top: 1px;
+    right: 3px;
+    font-size: 11px;
+    line-height: 1;
+}
+.pinned-row {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    margin-bottom: 8px;
+}
+.pinned-row select {
+    padding: 6px;
+    border: 1px solid #ddd;
+    border-radius: var(--radius-md);
+    font-size: 14px;
+}
+.pinned-row .pinned-name { flex: 1; }
+.btn.pinned-del { background-color: var(--color-danger); padding: 6px 12px; }
+.btn.pinned-del:hover { background-color: var(--color-danger-hover); }
+
 /* ─── 5. モーダル共通 ──────────────────────────────────── */
 .modal {
     display: none;
@@ -719,13 +748,13 @@ body {
     .btn { padding: 8px 14px; font-size: 13px; }
 }
 
-/* 印刷時:画面用UIを隠す。display: noneではなくvisibility: hiddenを使う
-   (display: noneだと入れ子で間違って印刷本体まで消すリスクがある)
-   空白の追加ページはprint.js側のposition:fixed+page-break制御で対処 */
+/* 印刷時:画面用UIを完全に隠す(印刷用CSSはprint.js内で詳細指定)
+   ★重要:印刷プレビューモーダルだけは除外 — これが消えると印刷真っ白になる */
 @media print {
-    body > *:not(#print-preview-modal) {
-        visibility: hidden !important;
-        position: absolute !important;
-        left: -9999px !important;
+    #button-container,
+    #setting-mode-alert,
+    .subbuttons-container,
+    .modal:not(#print-preview-modal) {
+        display: none !important;
     }
 }

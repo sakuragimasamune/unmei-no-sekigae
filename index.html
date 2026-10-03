@@ -41,6 +41,7 @@
         <button class="btn" id="roster-btn" data-group="settings">名簿設定</button>
         <button class="btn" id="seat-setting-btn" data-group="settings">座席設定</button>
         <button class="btn" id="gender-setting-btn" data-group="settings">男女設定</button>
+        <button class="btn" id="pinned-seat-btn" data-group="settings">指定席設定</button>
         <button class="btn" id="color-settings-btn" data-group="settings">カラー設定</button>
         <button class="btn" id="message-settings-btn" data-group="settings">メッセージ設定</button>
         <button class="btn" id="effect-settings-btn" data-group="settings">特殊演出設定</button>
@@ -90,6 +91,21 @@
             <div class="modal-buttons">
                 <button class="btn" id="roster-cancel">キャンセル</button>
                 <button class="btn" id="roster-save">保存</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 指定席設定モーダル -->
+    <div id="pinned-modal" class="modal">
+        <div class="modal-content">
+            <h2>指定席設定</h2>
+            <p>視力や体調などの理由で、席をあらかじめ決めておく生徒を指定します。<br>
+               指定席の生徒はスタート前から席に表示され、抽選・交換・シャッフルなどの対象外になります。</p>
+            <div id="pinned-list"></div>
+            <button class="btn" id="pinned-add">指定席を追加</button>
+            <div class="modal-buttons">
+                <button class="btn" id="pinned-cancel">キャンセル</button>
+                <button class="btn" id="pinned-save">保存</button>
             </div>
         </div>
     </div>
@@ -273,9 +289,10 @@
         </div>
     </div>
 
-    <!-- スクリプト読み込み順:音響(他JSが参照可)→データ→演出→メイン -->
+    <!-- スクリプト読み込み順:音響(他JSが参照可)→データ→配置ソルバー→演出→メイン -->
     <script src="sound.js"></script>
     <script src="fortune.js"></script>
+    <script src="placement.js"></script>
     <script src="slot.js"></script>
     <script src="print.js"></script>
     <script src="script.js"></script>
