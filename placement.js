@@ -8,7 +8,7 @@
 //   どの時点でも「残りの生徒を条件どおりに全員座らせる配置」が
 //   少なくとも1つ存在する状態を保つ。これにより終盤の詰みが起きない。
 //
-// 追加ルール(距離ルール)は教員用の非表示パネルで管理する。
+// 追加ルール(ペアを「離す」/「隣にする」)は教員用の非表示パネルで管理する。
 //   開閉: Ctrl + Alt + K (Mac は control + option + K)
 //   ルールが1件もなければ、従来とまったく同じ挙動になる。
 // ============================================================
@@ -20,9 +20,27 @@
     const STORE_KEY = 'seatApp.uiCache';            // localStorage キー
     const SHORTCUT = { ctrlKey: true, altKey: true, code: 'KeyK' };
     const NODE_LIMIT = 60000;                        // 探索の上限(フリーズ防止)
+    // 候補ごとの判定は短く打ち切る。打ち切りは「不可」扱い(安全側)。
+    // 現在の盤面の完成例と矛盾しない席は探索なしで候補に入るので、候補ゼロにはならない。
+    const CANDIDATE_LIMIT = 400;
+    const EVENT_LIMIT = 1500;                        // 交換・再会など(不発になるだけ)
     const LIMIT = Symbol('limit');
 
-    const RANGE_LABELS = { 1: '周囲8席', 2: '周囲24席' };
+    // 範囲 N = 前後左右・斜めに N 席以内(チェビシェフ距離)。席数は (2N+1)^2 - 1
+    const TYPE_LABELS = { apart: '離す', together: '隣にする' };
+    // 隣の定義:lr=左右のみ / cross=前後左右 / around=斜め含む周囲8席
+    const ADJ_LABELS = {
+        lr: '左右の隣',
+        cross: '前後左右の隣',
+        around: '斜め含む周囲8席'
+    };
+    const RANGE_LABELS = {
+        1: '1周以内NG(周囲8席)',
+        2: '2周以内NG(周囲24席)',
+        3: '3周以内NG(周囲48席)',
+        4: '4周以内NG(周囲80席)',
+        5: '5周以内NG(周囲120席)'
+    };
 
     // ─── ルールの保存・読み込み(平文で見えないよう軽く符号化) ─
     function defaultRules() {
@@ -100,16 +118,42 @@
 
     function partnerIndex(pairs) {
         const idx = new Map();
-        const add = (a, b, range) => {
+        const add = (a, b, rule) => {
             if (!idx.has(a)) idx.set(a, []);
-            idx.get(a).push({ name: b, range });
+            idx.get(a).push(Object.assign({ name: b }, rule));
         };
         pairs.forEach(p => {
-            const range = parseInt(p.range) || 1;
-            add(p.a, p.b, range);
-            add(p.b, p.a, range);
+            const rule = ruleOf(p);
+            add(p.a, p.b, rule);
+            add(p.b, p.a, rule);
         });
         return idx;
+    }
+
+    /** ペア設定を正規化(旧データは type なし=離す) */
+    function ruleOf(p) {
+        if (p.type === 'together') return { type: 'together', adj: ADJ_LABELS[p.adj] ? p.adj : 'lr' };
+        return { type: 'apart', range: parseInt(p.range) || 1 };
+    }
+
+    function isAdjacent(a, b, adj) {
+        const dr = Math.abs(a.row - b.row), dc = Math.abs(a.col - b.col);
+        if (dr === 0 && dc === 0) return false;
+        if (adj === 'lr') return dr === 0 && dc === 1;
+        if (adj === 'cross') return dr + dc === 1;
+        return dr <= 1 && dc <= 1;
+    }
+
+    /** 2人の位置がルールに違反しているか */
+    function breaks(rule, a, b) {
+        if (rule.type === 'together') return !isAdjacent(a, b, rule.adj);
+        return dist(a, b) <= rule.range;
+    }
+
+    /** 2人が「隣にする」ペアか(演出で目立たせないために使う) */
+    function isTogetherPair(n1, n2) {
+        return activePairs().some(p => p.type === 'together' &&
+            ((p.a === n1 && p.b === n2) || (p.a === n2 && p.b === n1)));
     }
 
     function hasRules() {
@@ -122,7 +166,7 @@
         if (!ps) return false;
         return ps.some(p => {
             const q = pos[p.name];
-            return q && dist(q, seat) <= p.range;
+            return q && breaks(p, seat, q);
         });
     }
 
@@ -131,7 +175,7 @@
         const pos = posMapOf(grid);
         return pairs.filter(p => {
             const a = pos[p.a], b = pos[p.b];
-            return a && b && dist(a, b) <= (parseInt(p.range) || 1);
+            return a && b && breaks(ruleOf(p), a, b);
         });
     }
 
@@ -251,15 +295,62 @@
      *          { status: 'skip' }     生徒数>席数の構成(全員配置が前提でない)
      *          { status: 'none' }     不可能 / 打ち切り
      */
+    // ─── 完成例(witness)のキャッシュ ─────────────────────────
+    // 1手進んでも前の完成例はほぼそのまま通用するので、照合だけで済ませる
+    const witnessCache = [];
+    function rememberWitness(sol) {
+        witnessCache.unshift(sol);
+        if (witnessCache.length > 30) witnessCache.pop();
+    }
+
+    /** 完成例 sol(ペア対象生徒→席)がこの盤面でも有効か:O(人数) */
+    function witnessValid(grid, sol, idx, pos, remaining, empty) {
+        const hard = remaining.filter(s => idx.has(s.name));
+        const localPos = Object.assign({}, pos);
+        const usedSeats = new Set();
+        for (const s of hard) {
+            const seat = sol[s.name];
+            if (!seat || grid[seat.row][seat.col] || usedSeats.has(key(seat))) return false;
+            if (!seatingData.seats[seat.row][seat.col].enabled) return false;
+            if (!genderFits(seat.row, seat.col, s)) return false;
+            usedSeats.add(key(seat));
+            localPos[s.name] = seat;
+        }
+        for (const s of hard) {
+            if (conflictsAt(s.name, localPos[s.name], Object.assign({}, localPos, { [s.name]: undefined }), idx)) return false;
+        }
+        const free = remaining.filter(s => !idx.has(s.name));
+        return freeFits(free, empty.filter(x => !usedSeats.has(key(x))));
+    }
+
     function completion(grid, pairs, limit) {
         const idx = partnerIndex(pairs);
         const pos = posMapOf(grid);
         const remaining = seatingData.roster.filter(s => !pos[s.name]);
         const empty = enabledSeats().filter(s => !grid[s.row][s.col]);
         if (remaining.length > empty.length) return { status: 'skip' };
-        const res = solve(pos, remaining, empty, idx, { needFull: false, limit });
-        if (res && res !== LIMIT) return { status: 'ok', sol: res };
-        return { status: 'none', limited: res === LIMIT };
+
+        for (const sol of witnessCache) {
+            if (witnessValid(grid, sol, idx, pos, remaining, empty)) return { status: 'ok', sol };
+        }
+
+        // 短い探索を、決定的に1回+ランダムに数回(深追いより速い)
+        const total = limit || NODE_LIMIT;
+        const tries = total <= 2000 ? 1 : 6;
+        const each = Math.ceil(total / tries);
+        let limited = false;
+        for (let t = 0; t < tries; t++) {
+            const res = solve(pos, remaining, empty, idx, { needFull: false, limit: each, randomize: t > 0 });
+            if (res === null) return { status: 'none' };          // 完全に不可能と判明
+            if (res !== LIMIT) {
+                const sol = {};
+                remaining.forEach(s => { if (res[s.name]) sol[s.name] = res[s.name]; });
+                rememberWitness(sol);
+                return { status: 'ok', sol };
+            }
+            limited = true;
+        }
+        return { status: 'none', limited };
     }
 
     /** 完成例が実際に見つかったときだけ true(打ち切りは不可扱い=安全側) */
@@ -274,7 +365,7 @@
         // すでに存在する違反(指定席同士など動かせないもの)は不問、新しい違反だけを禁止
         const existing = new Set(violations(seatingData.assignments, pairs));
         if (violations(grid, pairs).some(p => !existing.has(p))) return false;
-        return canComplete(grid, pairs);
+        return canComplete(grid, pairs, EVENT_LIMIT);
     }
 
     // ============================================================
@@ -326,7 +417,7 @@
             if (consistent(s)) return true;
             const g = cloneGrid(A);
             g[s.row][s.col] = student;
-            return canComplete(g, pairs, 15000);
+            return canComplete(g, pairs, CANDIDATE_LIMIT);
         });
         if (strict.length) return strict;
         // ここから下は「すでに詰んでいる」場合の保険(通常は到達しない)
@@ -422,9 +513,13 @@
             const forbid = avoidOriginal
                 ? (s, seat) => original[s.name] && original[s.name].row === seat.row && original[s.name].col === seat.col
                 : null;
-            for (let attempt = 0; attempt < 5; attempt++) {
-                const res = solve(pinnedPos, students, seats, idx, { randomize: true, needFull: true, forbid });
+            for (let attempt = 0; attempt < 12; attempt++) {
+                const res = solve(pinnedPos, students, seats, idx, { randomize: true, needFull: true, forbid, limit: 2500 });
                 if (res && res !== LIMIT) {
+                    // まだ決まっていない生徒の席も解に含まれている=次の抽選の完成例として使える
+                    const sol = {};
+                    include.forEach(s => { if (idx.has(s.name)) sol[s.name] = res[s.name]; });
+                    rememberWitness(sol);
                     const g = cloneGrid(base);
                     placed.forEach(s => {
                         const seat = res[s.name];
@@ -484,9 +579,10 @@
         panel = el('div', { id: 'sx-panel', class: 'modal' });
         panel.innerHTML = `
             <div class="modal-content">
-                <h2>近接回避設定</h2>
-                <p style="margin-bottom:10px;">登録したペアは、抽選・交換・シャッフル・再会・ラストワンのすべてで
-                   指定範囲内に入らないよう配置されます。スロットの見た目は通常と変わりません。</p>
+                <h2>配置ルール</h2>
+                <p style="margin-bottom:10px;">登録したペアは、抽選・交換・シャッフル・再会・ラストワンのすべてで、
+                   「離す」なら指定範囲に入らないよう、「隣にする」なら必ず隣になるよう配置されます。
+                   スロットの見た目は通常と変わりません。</p>
                 <div class="sx-row">
                     <label><input type="checkbox" id="sx-enabled"> ルールを有効にする</label>
                 </div>
@@ -506,7 +602,7 @@
         document.body.appendChild(panel);
 
         panel.querySelector('#sx-add').addEventListener('click', () => {
-            draft.pairs.push({ a: '', b: '', range: 1 });
+            draft.pairs.push({ a: '', b: '', type: 'apart', range: 1 });
             renderList();
         });
         panel.querySelector('#sx-enabled').addEventListener('change', (e) => {
@@ -550,19 +646,41 @@
             const row = el('div', { class: 'sx-row' });
             const a = nameSelect(p.a);
             const b = nameSelect(p.b);
-            const range = el('select');
-            Object.entries(RANGE_LABELS).forEach(([v, label]) => {
-                range.appendChild(el('option', { value: v }, label));
+            const type = el('select');
+            Object.entries(TYPE_LABELS).forEach(([v, label]) => {
+                type.appendChild(el('option', { value: v }, label));
             });
-            range.value = String(p.range || 1);
+            type.value = p.type === 'together' ? 'together' : 'apart';
+
+            const range = el('select');
+            const fillRange = () => {
+                range.innerHTML = '';
+                const labels = type.value === 'together' ? ADJ_LABELS : RANGE_LABELS;
+                Object.entries(labels).forEach(([v, label]) => {
+                    range.appendChild(el('option', { value: v }, label));
+                });
+                range.value = type.value === 'together' ? (p.adj || 'lr') : String(p.range || 1);
+            };
+            fillRange();
             const x = el('button', { class: 'sx-x' }, '削除');
 
             a.addEventListener('change', () => { p.a = a.value; renderStatus(); });
             b.addEventListener('change', () => { p.b = b.value; renderStatus(); });
-            range.addEventListener('change', () => { p.range = parseInt(range.value); renderStatus(); });
+            type.addEventListener('change', () => {
+                p.type = type.value;
+                if (p.type === 'together') { p.adj = p.adj || 'lr'; delete p.range; }
+                else { p.range = p.range || 1; delete p.adj; }
+                fillRange();
+                renderStatus();
+            });
+            range.addEventListener('change', () => {
+                if (p.type === 'together') p.adj = range.value;
+                else p.range = parseInt(range.value);
+                renderStatus();
+            });
             x.addEventListener('click', () => { draft.pairs.splice(i, 1); renderList(); });
 
-            row.append(a, el('span', {}, '×'), b, range, x);
+            row.append(a, el('span', {}, 'と'), b, el('span', {}, 'を'), type, range, x);
             list.appendChild(row);
         });
         renderStatus();
@@ -583,7 +701,9 @@
         }
         const msgs = [];
         const v = violations(seatingData.assignments, pairs);
-        v.forEach(p => msgs.push(`⚠ ${p.a} と ${p.b} はすでに範囲内に配置されています(指定席か、ルール追加前の配置)`));
+        v.forEach(p => msgs.push(p.type === 'together'
+            ? `⚠ ${p.a} と ${p.b} はすでに隣ではない席に配置されています(指定席か、ルール追加前の配置)`
+            : `⚠ ${p.a} と ${p.b} はすでに範囲内に配置されています(指定席か、ルール追加前の配置)`));
         const idx = partnerIndex(pairs);
         const res = solve(posMapOf(seatingData.assignments),
             seatingData.roster.filter(s => !posMapOf(seatingData.assignments)[s.name]),
@@ -632,6 +752,7 @@
 
     window.SeatSolver = {
         hasRules,
+        isTogetherPair,
         isPinned,
         candidateSeatsFor,
         stealTargets,

@@ -1002,7 +1002,9 @@ async function checkReunionEvent(newStudent, newSeat) {
         }
         const viablePairs = pastPairs.filter(p => {
             const partnerName = p.student1 === newStudent.name ? p.student2 : p.student1;
-            return !isStudentAssigned(partnerName);
+            // 「隣にする」ペア同士は再会演出で目立たせない
+            return !isStudentAssigned(partnerName) &&
+                   !window.SeatSolver.isTogetherPair(newStudent.name, partnerName);
         });
         if (viablePairs.length === 0) {
             window.slotMachine.reunionEventInProgress = false;

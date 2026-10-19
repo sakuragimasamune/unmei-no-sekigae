@@ -424,7 +424,8 @@ class SlotMachine {
 
        // ★v2.6:実際に止まってよい相手(配置条件を満たす相手)
        const validPartners = assignedStudents.filter(a =>
-           window.SeatSolver.swapAllowed(row, col, a.row, a.col)
+           window.SeatSolver.swapAllowed(row, col, a.row, a.col) &&
+           !window.SeatSolver.isTogetherPair(name, a.student.name)
        );
 
        if (assignedStudents.length === 0 || validPartners.length === 0) {
