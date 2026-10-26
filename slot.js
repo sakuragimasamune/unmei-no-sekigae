@@ -1024,9 +1024,10 @@ class SpecialEffectManager {
         const frontBack = localStorage.getItem('frontBackEventProbability');
         const window = localStorage.getItem('windowEventProbability');
         
-        // デフォルト値は20%
-        this.frontBackProbability = frontBack !== null ? parseInt(frontBack) : 20;
-        this.windowProbability = window !== null ? parseInt(window) : 20;
+        // ★v2.7:デフォルト値は100%(値が壊れている場合もデフォルトに戻す)
+        const fb = parseInt(frontBack), wd = parseInt(window);
+        this.frontBackProbability = Number.isNaN(fb) ? 100 : fb;
+        this.windowProbability = Number.isNaN(wd) ? 100 : wd;
 
         console.log('Special effect probabilities loaded:', {
             frontBack: this.frontBackProbability,

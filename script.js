@@ -30,6 +30,18 @@ function createEmptyAssignments() {
     return Array(ROWS).fill().map(() => Array(COLS).fill(null));
 }
 
+// ─── v2.7:確定演出の旧デフォルト(20%)を新デフォルト(100%)へ一度だけ移行 ─
+(function migrateEffectDefaults() {
+    try {
+        if (localStorage.getItem('effectDefaultsV27')) return;
+        ['frontBackEventProbability', 'windowEventProbability'].forEach(k => {
+            const v = localStorage.getItem(k);
+            if (v === '20' || v === 'null') localStorage.setItem(k, '100');
+        });
+        localStorage.setItem('effectDefaultsV27', '1');
+    } catch (e) { /* localStorage が使えない環境では何もしない */ }
+})();
+
 // ─── グローバル状態 ──────────────────────────────────────────
 let currentMode = MODE.NORMAL;
 let isSettingMode = false;
@@ -228,14 +240,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!slider || !valueDisplay) return;
 
         const config = {
-            'front-back': { default: 20, max: 100, storageKey: 'frontBackEventProbability' },
-            'window':     { default: 20, max: 100, storageKey: 'windowEventProbability' },
+            'front-back': { default: 100, max: 100, storageKey: 'frontBackEventProbability' },
+            'window':     { default: 100, max: 100, storageKey: 'windowEventProbability' },
             'exchange':   { default: 5,  max: 20,  storageKey: 'exchangeEventProbability' },
             'reunion':    { default: 5,  max: 20,  storageKey: 'reunionEventProbability' },
             'shuffle':    { default: 1,  max: 2,   storageKey: 'shuffleEventProbability' }
         };
-        const savedValue = localStorage.getItem(config[type].storageKey);
-        const value = savedValue !== null ? parseInt(savedValue) : config[type].default;
+        const savedValue = parseInt(localStorage.getItem(config[type].storageKey));
+        const value = Number.isNaN(savedValue) ? config[type].default : savedValue;
         slider.max = config[type].max;
         slider.value = value;
         valueDisplay.textContent = `${value}%`;
@@ -1390,6 +1402,8 @@ function exportConfiguration() {
             },
             fortuneType: localStorage.getItem('fortuneType'),
             customFortune: localStorage.getItem('customFortune'),
+            printClassName: localStorage.getItem('printClassName'),
+            printDeskLabel: localStorage.getItem('printDeskLabel'),
             ...(window.SeatSolver.shouldExport() ? { uiCache: window.SeatSolver.exportBlob() } : {})
         },
         history: JSON.parse(localStorage.getItem('seatingConfig') || '{"history":{"pairs":[]}}').history
@@ -1420,13 +1434,20 @@ function importConfiguration(file) {
             seatingData.assignments = config.settings.currentAssignments.map(migrateAssignmentRow);
             colorSettings = config.settings.colors;
 
-            const eff = config.settings.effects;
-            localStorage.setItem('frontBackEventProbability', eff.frontBack);
-            localStorage.setItem('windowEventProbability',    eff.window);
-            localStorage.setItem('exchangeEventProbability',  eff.exchange);
-            localStorage.setItem('reunionEventProbability',   eff.reunion);
-            localStorage.setItem('shuffleEventProbability',   eff.shuffle);
-            localStorage.setItem('fortuneType', config.settings.fortuneType);
+            // ★v2.7:値が無い項目は書き込まない(旧版では "null" という文字列が入り、演出が出なくなっていた)
+            const setIfPresent = (k, v) => {
+                if (v === null || v === undefined || v === 'null') localStorage.removeItem(k);
+                else localStorage.setItem(k, v);
+            };
+            const eff = config.settings.effects || {};
+            setIfPresent('frontBackEventProbability', eff.frontBack);
+            setIfPresent('windowEventProbability',    eff.window);
+            setIfPresent('exchangeEventProbability',  eff.exchange);
+            setIfPresent('reunionEventProbability',   eff.reunion);
+            setIfPresent('shuffleEventProbability',   eff.shuffle);
+            setIfPresent('fortuneType', config.settings.fortuneType);
+            setIfPresent('printClassName', config.settings.printClassName);
+            setIfPresent('printDeskLabel', config.settings.printDeskLabel);
 
             if (config.settings.customFortune) {
                 localStorage.setItem('customFortune', config.settings.customFortune);

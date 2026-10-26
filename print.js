@@ -32,8 +32,12 @@ document.addEventListener('DOMContentLoaded', () => {
                     </label>
                 </div>
                 <div class="print-setting-group">
-                    <label>印刷タイトル(教卓内に表示):</label>
-                    <input type="text" id="print-title" value="教卓" placeholder="例: 1年A組 教卓">
+                    <label>クラス名(教卓の左に表示):</label>
+                    <input type="text" id="print-class-name" placeholder="例: 1年A組">
+                </div>
+                <div class="print-setting-group">
+                    <label>教卓の表示:</label>
+                    <input type="text" id="print-title" value="教卓" placeholder="教卓">
                 </div>
                 <div class="print-setting-group">
                     <label>文字サイズ調整:</label>
@@ -95,7 +99,7 @@ document.addEventListener('DOMContentLoaded', () => {
             margin-bottom: 10px;
         }
         
-        #print-title, #font-size-option {
+        #print-title, #print-class-name, #font-size-option {
             padding: 5px 10px;
             width: 100%;
             margin-top: 5px;
@@ -166,6 +170,17 @@ document.addEventListener('DOMContentLoaded', () => {
             font-size: 18px;
             box-shadow: 0 2px 3px rgba(0,0,0,0.2);
             border: 2px solid #2c3e50;
+        }
+        .print-class-name {
+            grid-column: 1;       /* 左列(教卓の左隣) */
+            justify-self: start;  /* 用紙の左端に揃える */
+            font-size: 22px;
+            font-weight: bold;
+            color: #2c3e50;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
         }
         .print-date-inline {
             grid-column: 3;       /* 右列(教卓の右隣) */
@@ -332,6 +347,9 @@ document.addEventListener('DOMContentLoaded', () => {
     
     // 印刷ボタンクリックイベント
     printBtn.addEventListener('click', () => {
+        // 設定ファイルを読み込んだ直後でも最新の値を表示
+        titleInput.value = localStorage.getItem('printDeskLabel') ?? '教卓';
+        classInput.value = localStorage.getItem('printClassName') ?? '';
         generatePrintPreview();
         printPreviewModal.style.display = 'flex';
     });
@@ -354,9 +372,21 @@ document.addEventListener('DOMContentLoaded', () => {
             dateEl.style.display = document.getElementById('show-date').checked ? 'inline' : 'none';
         }
     });
-    document.getElementById('print-title').addEventListener('input', (e) => {
+    // ★v2.7:クラス名と教卓の表示は別々に設定し、次回のために記憶する
+    const titleInput = document.getElementById('print-title');
+    const classInput = document.getElementById('print-class-name');
+    titleInput.value = localStorage.getItem('printDeskLabel') ?? '教卓';
+    classInput.value = localStorage.getItem('printClassName') ?? '';
+
+    titleInput.addEventListener('input', (e) => {
+        localStorage.setItem('printDeskLabel', e.target.value);
         const deskEl = document.querySelector('.print-teacher-desk');
         if (deskEl) deskEl.textContent = e.target.value || '教卓';
+    });
+    classInput.addEventListener('input', (e) => {
+        localStorage.setItem('printClassName', e.target.value);
+        const classEl = document.querySelector('.print-class-name');
+        if (classEl) classEl.textContent = e.target.value;
     });
     document.getElementById('font-size-option').addEventListener('change', () => {
         updateFontSizeClass();
@@ -379,9 +409,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const currentIsTeacherView = isCurrentlyTeacherView();
 
-        // ─── 教卓ブロック(教卓+日付横並び) ──────────
+        // ─── 教卓ブロック(クラス名+教卓+日付横並び) ───
         const teacherRow = document.createElement('div');
         teacherRow.className = 'print-teacher-row';
+
+        const className = document.createElement('div');
+        className.className = 'print-class-name';
+        className.textContent = document.getElementById('print-class-name').value;
 
         const teacherDesk = document.createElement('div');
         teacherDesk.className = 'print-teacher-desk';
@@ -395,6 +429,7 @@ document.addEventListener('DOMContentLoaded', () => {
             dateInline.style.display = 'none';
         }
 
+        teacherRow.appendChild(className);
         teacherRow.appendChild(teacherDesk);
         teacherRow.appendChild(dateInline);
 
